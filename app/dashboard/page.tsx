@@ -226,7 +226,7 @@ export default function DashboardPage() {
                       </span>
 
                       <Link
-                        href={`/tokens?address=${token.address}`}
+                        href={`/token/${token.address}`}
                         className="text-amber-500 hover:text-amber-400 transition-colors"
                       >
                         <ExternalLink className="h-5 w-5" />
