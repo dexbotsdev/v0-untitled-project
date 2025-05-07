@@ -6,10 +6,10 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Key, ShieldCheck } from "lucide-react"
+import { Loader2, ShieldCheck } from "lucide-react"
 
 export default function LicenseValidatorPage() {
   const [licenseKey, setLicenseKey] = useState("")
@@ -88,16 +88,18 @@ export default function LicenseValidatorPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <div className="relative">
-                  <Textarea
-                    placeholder="Paste your license key here..."
+                  <Input
+                    type="text"
+                    placeholder="Enter license key (XXXXX-XXXXX-XXXXX-XXXXX)"
                     value={licenseKey}
                     onChange={(e) => setLicenseKey(e.target.value)}
-                    className="min-h-[120px] bg-gray-900/50 border-gray-800 font-mono text-sm resize-none"
+                    className="bg-gray-900/50 border-gray-800 font-mono text-sm"
+                    pattern="[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}"
+                    maxLength={23}
                   />
-                  <Key className="absolute top-3 right-3 h-5 w-5 text-gray-500" />
                 </div>
                 <p className="text-xs text-gray-400">
-                  Your license key should be in the format provided in your purchase confirmation email
+                  Your license key should be in the format FONEI-YZTWR-JWKAA-MUSPT
                 </p>
               </div>
             </CardContent>
