@@ -2,115 +2,128 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { toast } from "@/hooks/use-toast"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
+import { Loader2, Key, ShieldCheck } from "lucide-react"
 
-export default function LicenseValidator() {
+export default function LicenseValidatorPage() {
   const [licenseKey, setLicenseKey] = useState("")
   const [isValidating, setIsValidating] = useState(false)
-  const [error, setError] = useState("")
   const router = useRouter()
+  const { toast } = useToast()
 
-  useEffect(() => {
-    // Check if already authenticated
-    const isAuthenticated = localStorage.getItem("boss_authenticated")
-    if (isAuthenticated === "true") {
-      router.push("/tokens")
-    }
-  }, [router])
+  const handleValidation = async (e: React.FormEvent) => {
+    e.preventDefault()
 
-  const handleValidateLicense = async () => {
     if (!licenseKey.trim()) {
-      setError("Please enter a license key")
+      toast({
+        title: "Error",
+        description: "Please enter a license key",
+        variant: "destructive",
+      })
       return
     }
 
     setIsValidating(true)
-    setError("")
 
-    try {
-      // Simulate API call with timeout
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+    // Simulate API validation call
+    await new Promise((resolve) => setTimeout(resolve, 1500))
 
-      // For demo purposes, accept any key that starts with "BOSS-" and is at least 10 chars
-      if (licenseKey.startsWith("BOSS-") && licenseKey.length >= 10) {
-        // Store authentication state
-        localStorage.setItem("boss_authenticated", "true")
+    // For demo purposes, any key with at least 16 characters is considered valid
+    const isValid = licenseKey.trim().length >= 16
 
-        toast({
-          title: "License Validated",
-          description: "Welcome to BOSS Dashboard",
-          variant: "default",
-        })
+    setIsValidating(false)
 
-        // Redirect to tokens page
-        router.push("/tokens")
-      } else {
-        setError("Invalid license key. Please try again.")
-      }
-    } catch (err) {
-      setError("An error occurred. Please try again.")
-      console.error(err)
-    } finally {
-      setIsValidating(false)
-    }
-  }
+    if (isValid) {
+      toast({
+        title: "License Validated",
+        description: "Your license key has been successfully validated",
+      })
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleValidateLicense()
+      // Store validation status in localStorage
+      localStorage.setItem("licenseValidated", "true")
+
+      // Redirect to strategies page after a short delay
+      setTimeout(() => {
+        router.push("/strategies")
+      }, 1000)
+    } else {
+      toast({
+        title: "Invalid License",
+        description: "The license key you entered is invalid. Please try again.",
+        variant: "destructive",
+      })
     }
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[#0c0d16]">
-      <div className="w-full max-w-md p-8 space-y-8 bg-[#1e2133] rounded-lg shadow-xl border border-amber-600/20">
-        <div className="flex flex-col items-center justify-center space-y-2">
-          <div className="relative w-48 h-24">
-            <Image src="/images/boss-logo.png" alt="BOSS Logo" fill style={{ objectFit: "contain" }} priority />
-          </div>
-          <h2 className="mt-4 text-2xl font-bold text-center text-amber-500">License Validation</h2>
-          <p className="text-sm text-gray-400">Enter your license key to access the dashboard</p>
+    <div className="min-h-screen flex items-center justify-center bg-[#11111D]">
+      <div className="w-full max-w-md p-4">
+        <div className="flex justify-center mb-8">
+          <Image
+            src="/images/iconlogo.png"
+            alt="FAB Logo"
+            width={80}
+            height={80}
+            priority
+            className="drop-shadow-[0_5px_5px_rgba(0,0,0,0.3)]"
+          />
         </div>
 
-        <div className="mt-8 space-y-6">
-          <div className="space-y-2">
-            <label htmlFor="license-key" className="text-sm font-medium text-gray-300">
-              License Key
-            </label>
-            <Input
-              id="license-key"
-              type="text"
-              value={licenseKey}
-              onChange={(e) => setLicenseKey(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="BOSS-XXXX-XXXX-XXXX"
-              className="bg-[#12131e] border-gray-700 focus:border-amber-500 focus:ring-amber-500"
-              autoComplete="off"
-              spellCheck="false"
-            />
-            {error && <p className="text-sm text-red-500">{error}</p>}
-          </div>
+        <Card className="bg-black border-gray-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <ShieldCheck className="h-5 w-5 text-amber-500" />
+              License Validation
+            </CardTitle>
+            <CardDescription>Enter your license key to access the platform</CardDescription>
+          </CardHeader>
 
-          <div>
-            <Button
-              onClick={handleValidateLicense}
-              disabled={isValidating}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-black font-medium"
-            >
-              {isValidating ? "Validating..." : "Authenticate"}
-            </Button>
-          </div>
+          <form onSubmit={handleValidation}>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="relative">
+                  <Textarea
+                    placeholder="Paste your license key here..."
+                    value={licenseKey}
+                    onChange={(e) => setLicenseKey(e.target.value)}
+                    className="min-h-[120px] bg-gray-900/50 border-gray-800 font-mono text-sm resize-none"
+                  />
+                  <Key className="absolute top-3 right-3 h-5 w-5 text-gray-500" />
+                </div>
+                <p className="text-xs text-gray-400">
+                  Your license key should be in the format provided in your purchase confirmation email
+                </p>
+              </div>
+            </CardContent>
 
-          <div className="text-xs text-center text-gray-500">
-            <p>For demo purposes, use any key that starts with "BOSS-" and is at least 10 characters long</p>
-            <p className="mt-1">Example: BOSS-1234-5678</p>
-          </div>
-        </div>
+            <CardFooter>
+              <Button
+                type="submit"
+                className="w-full bg-amber-600 hover:bg-amber-700 text-black"
+                disabled={isValidating}
+              >
+                {isValidating ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  <>Validate License</>
+                )}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+
+        <p className="text-center text-xs text-gray-500 mt-4">
+          If you don't have a license key, please contact support at support@fabcrypto.com
+        </p>
       </div>
     </div>
   )

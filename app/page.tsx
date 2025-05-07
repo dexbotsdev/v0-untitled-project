@@ -2,31 +2,57 @@
 
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
+import { Button } from "@/components/ui/button"
+import { Lock } from "lucide-react"
 
 export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Check if authenticated
-    const isAuthenticated = localStorage.getItem("boss_authenticated")
+    // Check if license is already validated
+    const isLicenseValidated = localStorage.getItem("licenseValidated") === "true"
 
-    // Redirect to appropriate page
-    if (isAuthenticated === "true") {
-     // router.push("/tokens")
-    } else {
-     // router.push("/license-validator")
+    // If validated, redirect to volume-bot page after a short delay
+    if (isLicenseValidated) {
+      const timeout = setTimeout(() => {
+        router.push("/volume-bot")
+      }, 2500)
+
+      return () => clearTimeout(timeout)
     }
   }, [router])
 
-  // Show loading state while redirecting
+  const handleAccessClick = () => {
+    router.push("/license-validator")
+  }
+
+  // Show loading state with FAB logo while redirecting
   return (
-    <div className="flex items-center justify-center h-screen bg-[#0c0d16]">
+    <div className="flex flex-col items-center justify-center h-screen bg-black">
       <div className="text-center">
-        <div className="wrapper mt-10">
-          <div className="bg"> bloop </div>
-          <div className="fg"> bloop </div>
+        <div className="relative w-[600px] max-w-full mx-auto">
+          <Image
+            src="/images/fab-logo-new.png"
+            alt="FAB Logo"
+            width={980}
+            height={340}
+            priority
+            className="drop-shadow-[0_5px_5px_rgba(0,0,0,0.3)]"
+          />
         </div>
-        <p className="text-gray-400 mt-4">Loading...</p>
+
+        <div className="mt-8">
+          <Button
+            onClick={handleAccessClick}
+            className="bg-amber-600 hover:bg-amber-700 text-black px-8 py-6 text-lg rounded-lg"
+          >
+            <Lock className="mr-2 h-5 w-5" />
+            Access Platform
+          </Button>
+        </div>
+
+        <p className="text-gray-400 mt-4">Enter your license key to access the platform</p>
       </div>
     </div>
   )

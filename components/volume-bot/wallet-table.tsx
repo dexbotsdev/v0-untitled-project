@@ -6,15 +6,28 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { ArrowUpDown, RefreshCw } from "lucide-react"
+import { ArrowUpDown, RefreshCw, Trash2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface WalletTableProps {
   wallets: any[]
   isLoading: boolean
   isBotActive: boolean
+  selectAll: boolean
+  onSelectAll: (checked: boolean) => void
+  onSelectWallet: (id: string, checked: boolean) => void
+  onDeleteWallets: () => void
 }
 
-export function WalletTable({ wallets, isLoading, isBotActive }: WalletTableProps) {
+export function WalletTable({
+  wallets,
+  isLoading,
+  isBotActive,
+  selectAll,
+  onSelectAll,
+  onSelectWallet,
+  onDeleteWallets,
+}: WalletTableProps) {
   const [sortField, setSortField] = useState<string>("tradesCount")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
 
@@ -57,7 +70,7 @@ export function WalletTable({ wallets, isLoading, isBotActive }: WalletTableProp
           </Badge>
           <Button variant="ghost" size="icon" className="h-8 w-8">
             <RefreshCw className="h-4 w-4" />
-          </Button>
+          </Button> 
         </div>
       </div>
 
@@ -65,6 +78,13 @@ export function WalletTable({ wallets, isLoading, isBotActive }: WalletTableProp
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[40px] text-center">
+                <Checkbox
+                  checked={selectAll}
+                  onCheckedChange={(checked) => onSelectAll(checked === true)}
+                  className="data-[state=checked]:bg-amber-700 data-[state=checked]:border-amber-800"
+                />
+              </TableHead>
               <TableHead className="w-[180px]">
                 <Button
                   variant="ghost"
@@ -114,6 +134,9 @@ export function WalletTable({ wallets, isLoading, isBotActive }: WalletTableProp
               Array.from({ length: 10 }).map((_, i) => (
                 <TableRow key={i}>
                   <TableCell>
+                    <Skeleton className="h-4 w-4" />
+                  </TableCell>
+                  <TableCell>
                     <Skeleton className="h-4 w-24" />
                   </TableCell>
                   <TableCell>
@@ -132,7 +155,14 @@ export function WalletTable({ wallets, isLoading, isBotActive }: WalletTableProp
               ))
             ) : sortedWallets.length > 0 ? (
               sortedWallets.map((wallet) => (
-                <TableRow key={wallet.id}>
+                <TableRow key={wallet.id} className={wallet.selected ? "bg-[#2A2A40]" : ""}>
+                  <TableCell className="text-center">
+                    <Checkbox
+                      checked={wallet.selected}
+                      onCheckedChange={(checked) => onSelectWallet(wallet.id, checked === true)}
+                      className="data-[state=checked]:bg-amber-700 data-[state=checked]:border-amber-800"
+                    />
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{formatAddress(wallet.address)}</TableCell>
                   <TableCell>{wallet.tokenBalance.toFixed(2)}</TableCell>
                   <TableCell>{wallet.solBalance.toFixed(2)} SOL</TableCell>
@@ -146,7 +176,7 @@ export function WalletTable({ wallets, isLoading, isBotActive }: WalletTableProp
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   No wallets found
                 </TableCell>
               </TableRow>
