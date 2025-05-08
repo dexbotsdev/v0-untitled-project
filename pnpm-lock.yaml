@@ -92,6 +92,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: latest
         version: 1.2.6(@types/react-dom@19.0.0)(@types/react@19.0.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      '@tauri-apps/api':
+        specifier: latest
+        version: 2.5.0
       '@tauri-apps/plugin-sql':
         specifier: latest
         version: 2.2.0
@@ -107,6 +110,9 @@ importers:
       cmdk:
         specifier: 1.0.4
         version: 1.0.4(@types/react-dom@19.0.0)(@types/react@19.0.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      crypto-js:
+        specifier: latest
+        version: 4.2.0
       date-fns:
         specifier: 4.1.0
         version: 4.1.0
@@ -1450,6 +1456,9 @@ packages:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
 
+  crypto-js@4.2.0:
+    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+
   cssesc@3.0.0:
     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
     engines: {node: '>=4'}
@@ -1527,8 +1536,8 @@ packages:
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
 
-  electron-to-chromium@1.5.150:
-    resolution: {integrity: sha512-rOOkP2ZUMx1yL4fCxXQKDHQ8ZXwisb2OycOQVKHgvB3ZI4CvehOd4y2tfnnLDieJ3Zs1RL1Dlp3cMkyIn7nnXA==}
+  electron-to-chromium@1.5.151:
+    resolution: {integrity: sha512-Rl6uugut2l9sLojjS4H4SAr3A4IgACMLgpuEMPYCVcKydzfyPrn5absNRju38IhQOf/NwjJY8OGWjlteqYeBCA==}
 
   embla-carousel-react@8.5.1:
     resolution: {integrity: sha512-z9Y0K84BJvhChXgqn2CFYbfEi6AwEr+FFVVKm/MqbTQ2zIzO1VQri6w67LcfpVF0AjbhwVMywDZqY4alYkjW5w==}
@@ -3305,7 +3314,7 @@ snapshots:
   browserslist@4.24.5:
     dependencies:
       caniuse-lite: 1.0.30001717
-      electron-to-chromium: 1.5.150
+      electron-to-chromium: 1.5.151
       node-releases: 2.0.19
       update-browserslist-db: 1.1.3(browserslist@4.24.5)
 
@@ -3377,6 +3386,8 @@ snapshots:
       shebang-command: 2.0.0
       which: 2.0.2
 
+  crypto-js@4.2.0: {}
+
   cssesc@3.0.0: {}
 
   csstype@3.1.3: {}
@@ -3439,7 +3450,7 @@ snapshots:
 
   eastasianwidth@0.2.0: {}
 
-  electron-to-chromium@1.5.150: {}
+  electron-to-chromium@1.5.151: {}
 
   embla-carousel-react@8.5.1(react@19.0.0):
     dependencies:

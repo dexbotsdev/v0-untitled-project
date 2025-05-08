@@ -7,16 +7,18 @@ import { CreateBotDialog } from "@/components/volume-bot/create-bot-dialog"
 import { WalletTable } from "@/components/volume-bot/wallet-table"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { StopCircle, RefreshCw, Download, Send, Plus, Trash2 } from "lucide-react"
+import { StopCircle, RefreshCw, Download, Send, Plus, Trash2, Play, Ban, AlertTriangle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 
 export default function VolumeBotPage() {
+  // Add a new state variable to track if any bot is running
   const [tokens, setTokens] = useState<any[]>([])
   const [selectedToken, setSelectedToken] = useState<any | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [wallets, setWallets] = useState<any[]>([])
   const [isBotActive, setIsBotActive] = useState(false)
+  const [anyBotRunning, setAnyBotRunning] = useState(false)
   const { toast } = useToast()
   const [selectAll, setSelectAll] = useState(false)
   const [fundAllAmount, setFundAllAmount] = useState("")
@@ -24,14 +26,14 @@ export default function VolumeBotPage() {
   const [isConverting, setIsConverting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
 
-  // Mock data loading
+  // Update the useEffect that loads mock data to check if any bot is active
   useEffect(() => {
     const loadMockData = async () => {
       setIsLoading(true)
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      setTokens([
+      const mockTokens = [
         {
           id: "1",
           symbol: "PEPE",
@@ -72,7 +74,13 @@ export default function VolumeBotPage() {
             numberOfWallets: 15,
           },
         },
-      ])
+      ]
+
+      // Check if any bot is active
+      const hasActiveBots = mockTokens.some((token) => token.status === "active")
+      setAnyBotRunning(hasActiveBots)
+
+      setTokens(mockTokens)
       setIsLoading(false)
     }
 
@@ -117,13 +125,14 @@ export default function VolumeBotPage() {
     setSelectAll(false)
   }
 
+  // Update the handleAddToken function to ensure new tokens are created in paused state
   const handleAddToken = (newToken: any) => {
     // Ensure the newToken has all required properties including settings
     const tokenWithDefaults = {
       ...newToken,
       id: Date.now().toString(),
       progress: 0,
-      status: "active",
+      status: "paused", // Always create in paused state
       // Make sure settings is properly structured
       settings: {
         minTradeAmount: newToken.settings?.minTradeAmount || 0.01,
@@ -137,14 +146,14 @@ export default function VolumeBotPage() {
 
     setTokens((prev) => [...prev, tokenWithDefaults])
     setSelectedToken(tokenWithDefaults)
-    setIsBotActive(true)
+    setIsBotActive(false)
 
     // Start with empty wallets for new tokens
     setWallets([])
 
     toast({
       title: "Volume Bot Created",
-      description: `Volume bot for ${newToken.symbol} has been successfully created and started.`,
+      description: `Volume bot for ${newToken.symbol} has been created in paused state.`,
     })
   }
 
@@ -152,15 +161,53 @@ export default function VolumeBotPage() {
     setSelectedToken(token)
   }
 
+  // Update the handleStartBot function to check if any bot is already running
+  const handleStartBot = () => {
+    if (!selectedToken) return
+
+    // Only allow starting if the bot is in paused state
+    if (selectedToken.status !== "paused") {
+      toast({
+        title: "Cannot Start Bot",
+        description: "Only bots in paused state can be started.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Check if any other bot is already running
+    if (anyBotRunning) {
+      toast({
+        title: "Cannot Start Bot",
+        description: "Only one bot can run at a time. Please stop the currently running bot first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsBotActive(true)
+    setAnyBotRunning(true)
+    setTokens((prev) => prev.map((t) => (t.id === selectedToken.id ? { ...t, status: "active" } : t)))
+    setSelectedToken((prev) => (prev ? { ...prev, status: "active" } : null))
+
+    toast({
+      title: "Volume Bot Started",
+      description: `Volume bot for ${selectedToken.symbol} has been started.`,
+    })
+  }
+
+  // Update the handleStopBot function to update the anyBotRunning state
   const handleStopBot = () => {
     if (!selectedToken) return
 
     setIsBotActive(false)
-    setTokens((prev) => prev.map((t) => (t.id === selectedToken.id ? { ...t, status: "paused" } : t)))
+    setAnyBotRunning(false)
+    setTokens((prev) => prev.map((t) => (t.id === selectedToken.id ? { ...t, status: "stopped" } : t)))
+    setSelectedToken((prev) => (prev ? { ...prev, status: "stopped" } : null))
 
     toast({
       title: "Volume Bot Stopped",
-      description: `Volume bot for ${selectedToken.symbol} has been stopped.`,
+      description: `Volume bot for ${selectedToken.symbol} has been stopped and cannot be restarted.`,
     })
   }
 
@@ -185,6 +232,40 @@ export default function VolumeBotPage() {
     toast({
       title: "Data Export",
       description: "Wallet data has been exported to CSV.",
+    })
+  }
+
+  const handleDuplicateToken = (token: any) => {
+    // Create a duplicate token with a new ID
+    const duplicatedToken = {
+      ...token,
+      id: Date.now().toString(),
+      name: `${token.name} (Copy)`,
+      symbol: `${token.symbol}-C`,
+      progress: 0,
+      status: "paused",
+    }
+
+    setTokens((prev) => [...prev, duplicatedToken])
+
+    toast({
+      title: "Token Duplicated",
+      description: `A copy of ${token.symbol} has been created.`,
+    })
+  }
+
+  const handleDeleteToken = (token: any) => {
+    // Remove the token from the list
+    setTokens((prev) => prev.filter((t) => t.id !== token.id))
+
+    // If the deleted token was selected, clear the selection
+    if (selectedToken?.id === token.id) {
+      setSelectedToken(null)
+    }
+
+    toast({
+      title: "Token Deleted",
+      description: `${token.symbol} has been deleted.`,
     })
   }
 
@@ -378,12 +459,16 @@ export default function VolumeBotPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left side - Token list */}
         <div className="w-80 border-r bg-black border-gray-800 overflow-y-auto">
+          {/* Update the VolumeTokenList component to pass the anyBotRunning state */}
           <VolumeTokenList
             tokens={tokens}
             selectedTokenId={selectedToken?.id}
             onSelectToken={handleSelectToken}
             onAddToken={() => setIsDialogOpen(true)}
+            onDuplicateToken={handleDuplicateToken}
+            onDeleteToken={handleDeleteToken}
             isLoading={isLoading}
+            anyBotRunning={anyBotRunning}
           />
         </div>
 
@@ -410,10 +495,30 @@ export default function VolumeBotPage() {
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button variant="destructive" size="sm" onClick={handleStopBot} disabled={!isBotActive}>
-                    <StopCircle className="mr-1 h-4 w-4" />
-                    Stop Bot
-                  </Button>
+                  {selectedToken.status === "paused" && (
+                    <Button
+                      variant="success"
+                      size="sm"
+                      onClick={handleStartBot}
+                      disabled={anyBotRunning && selectedToken.status !== "active"}
+                      title={anyBotRunning ? "Only one bot can run at a time" : "Start Bot"}
+                    >
+                      <Play className="mr-1 h-4 w-4" />
+                      Start Bot
+                    </Button>
+                  )}
+                  {selectedToken.status === "active" && (
+                    <Button variant="destructive" size="sm" onClick={handleStopBot}>
+                      <StopCircle className="mr-1 h-4 w-4" />
+                      Stop Bot
+                    </Button>
+                  )}
+                  {selectedToken.status === "stopped" && (
+                    <Button variant="outline" size="sm" disabled>
+                      <Ban className="mr-1 h-4 w-4" />
+                      Bot Stopped
+                    </Button>
+                  )}
                   <Button variant="outline" size="sm" onClick={handleRecoverSols}>
                     Recover SOLs
                   </Button>
@@ -432,6 +537,13 @@ export default function VolumeBotPage() {
                   </Button>
                 </div>
               </div>
+
+              {selectedToken.status === "paused" && anyBotRunning && (
+                <div className="mt-2 text-xs text-amber-500 flex items-center p-4">
+                  <AlertTriangle className="h-4 w-4 mr-1" />
+                  Only one bot can run at a time. Please stop the currently running bot first.
+                </div>
+              )}
 
               <div className="flex-1 overflow-auto">
                 {/* Wallet Action Bar */}

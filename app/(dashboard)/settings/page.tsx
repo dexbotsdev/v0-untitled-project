@@ -1,15 +1,21 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Slider } from "@/components/ui/slider"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, RefreshCw, Upload, Shield, Wallet, ArrowDownToLine, Repeat } from "lucide-react"
+import { AlertCircle, Server, Wallet, Loader2, ArrowRightLeft } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function SettingsPage() {
   const { toast } = useToast()
@@ -29,9 +35,17 @@ export default function SettingsPage() {
   const [convertingDevWallet, setConvertingDevWallet] = useState(false)
   const [convertingFundingWallet, setConvertingFundingWallet] = useState(false)
 
-  // State for transaction settings
-  const [antiBubblemap, setAntiBubblemap] = useState(false)
-  const [priorityFee, setPriorityFee] = useState(1.5)
+  // Add these state variables after the other state declarations
+  const [transactionServerIp, setTransactionServerIp] = useState("127.0.0.1")
+  const [transactionServerPort, setTransactionServerPort] = useState("8080")
+  const [isTestingConnection, setIsTestingConnection] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<"idle" | "success" | "error">("idle")
+
+  // Add state for conversion dialog
+  const [isConversionDialogOpen, setIsConversionDialogOpen] = useState(false)
+  const [conversionAmount, setConversionAmount] = useState("")
+  const [currentWsolBalance, setCurrentWsolBalance] = useState(0.75) // Mock balance
+  const [currentSolBalance, setCurrentSolBalance] = useState(1.25) // Mock balance
 
   // Handle wallet import
   const handleImportWallet = async (type: "dev" | "funding") => {
@@ -139,9 +153,9 @@ export default function SettingsPage() {
     })
   }
 
-  // Handle SOL-WSOL conversion
-  const handleSolWsolConversion = async (type: "dev" | "funding") => {
-    if (type === "dev" && !devWalletAddress) {
+  // Handle opening the conversion dialog
+  const handleOpenConversionDialog = () => {
+    if (!devWalletAddress) {
       toast({
         title: "Error",
         description: "No development wallet address found",
@@ -150,60 +164,136 @@ export default function SettingsPage() {
       return
     }
 
-    if (type === "funding" && !fundingWalletAddress) {
+    // Fetch current balances (mock for now)
+    setCurrentWsolBalance(0.75)
+    setCurrentSolBalance(1.25)
+    setConversionAmount("")
+    setIsConversionDialogOpen(true)
+  }
+
+  // Handle SOL-WSOL conversion
+  const handleSolWsolConversion = async () => {
+    if (!devWalletAddress) {
       toast({
         title: "Error",
-        description: "No funding wallet address found",
+        description: "No development wallet address found",
         variant: "destructive",
       })
       return
     }
 
-    if (type === "dev") {
-      setConvertingDevWallet(true)
-    } else {
-      setConvertingFundingWallet(true)
+    if (!conversionAmount || isNaN(Number.parseFloat(conversionAmount)) || Number.parseFloat(conversionAmount) <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount to convert",
+        variant: "destructive",
+      })
+      return
     }
+
+    const amount = Number.parseFloat(conversionAmount)
+    if (amount > currentWsolBalance) {
+      toast({
+        title: "Error",
+        description: "Conversion amount exceeds available WSOL balance",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setConvertingDevWallet(true)
+    setIsConversionDialogOpen(false)
 
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    if (type === "dev") {
-      setConvertingDevWallet(false)
-    } else {
-      setConvertingFundingWallet(false)
-    }
+    // Update balances (mock)
+    setCurrentWsolBalance((prev) => prev - amount)
+    setCurrentSolBalance((prev) => prev + amount)
+
+    setConvertingDevWallet(false)
 
     toast({
       title: "Conversion Successful",
-      description: `Successfully converted SOL ↔ WSOL for ${type === "dev" ? "development" : "funding"} wallet`,
+      description: `Successfully converted ${amount} WSOL to SOL for development wallet`,
     })
   }
 
-  // Handle anti-bubblemap toggle
-  const handleAntiBubblemapToggle = () => {
-    setAntiBubblemap(!antiBubblemap)
+  // Add this function after the other handler functions
+  const handleTestConnection = async () => {
+    // Validate inputs
+    if (!transactionServerIp || !transactionServerPort) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter both IP address and port",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsTestingConnection(true)
+    setConnectionStatus("idle")
+
+    // Simulate API call to test connection
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+
+      // For demo purposes, we'll randomly succeed or fail
+      const isSuccess = Math.random() > 0.3
+
+      if (isSuccess) {
+        setConnectionStatus("success")
+        toast({
+          title: "Connection Successful",
+          description: `Successfully connected to ${transactionServerIp}:${transactionServerPort}`,
+        })
+      } else {
+        setConnectionStatus("error")
+        toast({
+          title: "Connection Failed",
+          description: "Could not connect to the transaction server",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      setConnectionStatus("error")
+      toast({
+        title: "Connection Error",
+        description: "An error occurred while testing the connection",
+        variant: "destructive",
+      })
+    } finally {
+      setIsTestingConnection(false)
+    }
+  }
+
+  const handleSaveServerSettings = () => {
+    // Validate inputs
+    if (!transactionServerIp || !transactionServerPort) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter both IP address and port",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Save settings
     toast({
-      title: "Settings Updated",
-      description: `Anti-Bubblemap protection ${!antiBubblemap ? "enabled" : "disabled"}`,
+      title: "Settings Saved",
+      description: "Transaction server settings have been saved",
     })
-  }
-
-  // Handle priority fee change
-  const handlePriorityFeeChange = (value: number[]) => {
-    setPriorityFee(value[0])
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-8 overflow-y-auto">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <Shield className="h-8 w-8 text-amber-500" />
-          Settings
-        </h1>
+    <div className="container mx-auto py-6 space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold mb-4">Settings</h1>
+        <p className="text-muted-foreground">Manage your application settings and database</p>
       </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Wallet Management */}
+        {/* Wallet Management Card - Keep this from the original */}
         <Card className="bg-black border-gray-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -212,190 +302,242 @@ export default function SettingsPage() {
             </CardTitle>
             <CardDescription>Configure your development and funding wallets</CardDescription>
           </CardHeader>
+          {/* Keep the existing CardContent for wallet management */}
           <CardContent className="space-y-6">
-            <Tabs defaultValue="dev" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 bg-[#111] mb-4">
-                <TabsTrigger
-                  value="dev"
-                  className="data-[state=active]:bg-amber-600 data-[state=active]:text-black data-[state=active]:font-medium"
-                >
-                  Development Wallet
-                </TabsTrigger>
-                <TabsTrigger
-                  value="funding"
-                  className="data-[state=active]:bg-amber-600 data-[state=active]:text-black data-[state=active]:font-medium"
-                >
-                  Funding Wallet
-                </TabsTrigger>
-              </TabsList>
+            {/* Existing wallet management content */}
+            <div className="space-y-2">
+              <Label htmlFor="dev-wallet">Development Wallet Address</Label>
+              <Input
+                id="dev-wallet"
+                type="text"
+                placeholder="0x..."
+                value={devWalletAddress}
+                onChange={(e) => setDevWalletAddress(e.target.value)}
+              />
+            </div>
 
-              <TabsContent value="dev" className="space-y-4">
-                {devWalletAddress ? (
-                  <div className="p-3 bg-[#111] rounded-md">
-                    <p className="text-sm text-gray-400 mb-1">Current Development Wallet</p>
-                    <p className="font-mono text-sm break-all">{devWalletAddress}</p>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[#111] rounded-md">
-                    <p className="text-sm text-gray-400">No development wallet configured</p>
-                  </div>
-                )}
+            <div className="space-y-2">
+              <Label htmlFor="funding-wallet">Funding Wallet Address</Label>
+              <Input
+                id="funding-wallet"
+                type="text"
+                placeholder="0x..."
+                value={fundingWalletAddress}
+                onChange={(e) => setFundingWalletAddress(e.target.value)}
+              />
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="dev-private-key">Private Key (for import)</Label>
-                  <Input
-                    id="dev-private-key"
-                    type="password"
-                    placeholder="Enter private key to import"
-                    value={privateKey}
-                    onChange={(e) => setPrivateKey(e.target.value)}
-                    className="font-mono"
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="private-key">Private Key</Label>
+              <Input
+                id="private-key"
+                type="password"
+                placeholder="Enter private key"
+                value={privateKey}
+                onChange={(e) => setPrivateKey(e.target.value)}
+              />
+            </div>
 
-                <div className="flex gap-3 flex-wrap">
-                  <Button
-                    onClick={() => handleImportWallet("dev")}
-                    disabled={importingDevWallet || !privateKey}
-                    className="flex-1 min-w-[120px]"
-                  >
-                    {importingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {importingDevWallet ? "Importing..." : "Import Wallet"}
-                    {!importingDevWallet && <Upload className="ml-2 h-4 w-4" />}
-                  </Button>
-                  <Button
-                    onClick={() => handleGenerateWallet("dev")}
-                    disabled={generatingDevWallet}
-                    variant="outline"
-                    className="flex-1 min-w-[120px]"
-                  >
-                    {generatingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {generatingDevWallet ? "Generating..." : "Generate New"}
-                    {!generatingDevWallet && <RefreshCw className="ml-2 h-4 w-4" />}
-                  </Button>
-                </div>
-                <div className="flex gap-3 flex-wrap">
-                  <Button
-                    onClick={() => handleRecoverWallet("dev")}
-                    disabled={recoveringDevWallet || !devWalletAddress}
-                    variant="ghost"
-                    className="flex-1 min-w-[120px] bg-amber-700/20 text-amber-400 hover:bg-amber-700/30 hover:text-amber-300"
-                  >
-                    {recoveringDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {recoveringDevWallet ? "Recovering..." : "Recover"}
-                    {!recoveringDevWallet && <ArrowDownToLine className="ml-2 h-4 w-4" />}
-                  </Button>
-                  <Button
-                    onClick={() => handleSolWsolConversion("dev")}
-                    disabled={convertingDevWallet || !devWalletAddress}
-                    variant="ghost"
-                    className="flex-1 min-w-[120px] bg-blue-700/20 text-blue-400 hover:bg-blue-700/30 hover:text-blue-300"
-                  >
-                    {convertingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {convertingDevWallet ? "Converting..." : "SOL ↔ WSOL"}
-                    {!convertingDevWallet && <Repeat className="ml-2 h-4 w-4" />}
-                  </Button>
-                </div>
-              </TabsContent>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => handleImportWallet("dev")}
+                disabled={importingDevWallet}
+                variant="outline"
+                className="flex-1"
+              >
+                {importingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {importingDevWallet ? "Importing..." : "Import Dev Wallet"}
+              </Button>
+              <Button onClick={() => handleGenerateWallet("dev")} disabled={generatingDevWallet} className="flex-1">
+                {generatingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {generatingDevWallet ? "Generating..." : "Generate Dev Wallet"}
+              </Button>
+            </div>
 
-              <TabsContent value="funding" className="space-y-4">
-                {fundingWalletAddress ? (
-                  <div className="p-3 bg-[#111] rounded-md">
-                    <p className="text-sm text-gray-400 mb-1">Current Funding Wallet</p>
-                    <p className="font-mono text-sm break-all">{fundingWalletAddress}</p>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-[#111] rounded-md">
-                    <p className="text-sm text-gray-400">No funding wallet configured</p>
-                  </div>
-                )}
+            <div className="flex gap-3">
+              <Button
+                onClick={() => handleImportWallet("funding")}
+                disabled={importingFundingWallet}
+                variant="outline"
+                className="flex-1"
+              >
+                {importingFundingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {importingFundingWallet ? "Importing..." : "Import Funding Wallet"}
+              </Button>
+              <Button
+                onClick={() => handleGenerateWallet("funding")}
+                disabled={generatingFundingWallet}
+                className="flex-1"
+              >
+                {generatingFundingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {generatingFundingWallet ? "Generating..." : "Generate Funding Wallet"}
+              </Button>
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="funding-private-key">Private Key (for import)</Label>
-                  <Input
-                    id="funding-private-key"
-                    type="password"
-                    placeholder="Enter private key to import"
-                    value={privateKey}
-                    onChange={(e) => setPrivateKey(e.target.value)}
-                    className="font-mono"
-                  />
-                </div>
+            <div className="flex">
+              <Button
+                onClick={() => handleRecoverWallet("dev")}
+                disabled={recoveringDevWallet}
+                variant="secondary"
+                className="w-full"
+              >
+                {recoveringDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {recoveringDevWallet ? "Recovering..." : "Recover Dev Wallet"}
+              </Button>
+            </div>
 
-                <div className="flex gap-3 flex-wrap">
-                  <Button
-                    onClick={() => handleImportWallet("funding")}
-                    disabled={importingFundingWallet || !privateKey}
-                    className="flex-1 min-w-[120px]"
-                  >
-                    {importingFundingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {importingFundingWallet ? "Importing..." : "Import Wallet"}
-                    {!importingFundingWallet && <Upload className="ml-2 h-4 w-4" />}
-                  </Button>
-                  <Button
-                    onClick={() => handleGenerateWallet("funding")}
-                    disabled={generatingFundingWallet}
-                    variant="outline"
-                    className="flex-1 min-w-[120px]"
-                  >
-                    {generatingFundingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {generatingFundingWallet ? "Generating..." : "Generate New"}
-                    {!generatingFundingWallet && <RefreshCw className="ml-2 h-4 w-4" />}
-                  </Button>
-                </div>
-              </TabsContent>
-            </Tabs>
+            <div className="flex">
+              <Button
+                onClick={handleOpenConversionDialog}
+                disabled={convertingDevWallet || !devWalletAddress}
+                variant="secondary"
+                className="w-full"
+              >
+                {convertingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {convertingDevWallet ? "Converting..." : "Convert Dev WSOL ↔ SOL"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Transaction Settings */}
+        {/* Transaction Server Card */}
         <Card className="bg-black border-gray-800">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-amber-500" />
-              Transaction Settings
+              <Server className="h-5 w-5 text-amber-500" />
+              Transaction Server
             </CardTitle>
-            <CardDescription>Configure transaction behavior and security</CardDescription>
+            <CardDescription>Configure connection to the transaction server</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="anti-bubblemap">Anti-Bubblemap Protection</Label>
-                <p className="text-sm text-gray-400">Protect transactions from bubblemap attacks and frontrunning</p>
-              </div>
-              <Switch id="anti-bubblemap" checked={antiBubblemap} onCheckedChange={handleAntiBubblemapToggle} />
-            </div>
+            {connectionStatus === "error" && (
+              <Alert variant="destructive" className="bg-red-900/20 border-red-900 text-red-400">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Failed to connect to the transaction server. Please check your settings and try again.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {connectionStatus === "success" && (
+              <Alert className="bg-green-900/20 border-green-900 text-green-400">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>Successfully connected to the transaction server.</AlertDescription>
+              </Alert>
+            )}
 
             <div className="space-y-4">
-              <div className="space-y-0.5">
-                <Label htmlFor="priority-fee">Default Priority Fee (GWEI)</Label>
-                <p className="text-sm text-gray-400">Higher values may result in faster transaction processing</p>
-              </div>
-              <div className="space-y-3">
-                <Slider
-                  id="priority-fee"
-                  defaultValue={[priorityFee]}
-                  max={10}
-                  min={0.1}
-                  step={0.1}
-                  onValueChange={handlePriorityFeeChange}
-                  className="w-full"
+              <div className="space-y-2">
+                <Label htmlFor="server-ip">Server IP Address</Label>
+                <Input
+                  id="server-ip"
+                  type="text"
+                  placeholder="e.g. 192.168.1.100"
+                  value={transactionServerIp}
+                  onChange={(e) => setTransactionServerIp(e.target.value)}
                 />
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-400">0.1</span>
-                  <span className="text-sm font-medium text-amber-500">{priorityFee.toFixed(1)}</span>
-                  <span className="text-sm text-gray-400">10.0</span>
-                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="server-port">Server Port</Label>
+                <Input
+                  id="server-port"
+                  type="text"
+                  placeholder="e.g. 8080"
+                  value={transactionServerPort}
+                  onChange={(e) => setTransactionServerPort(e.target.value)}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleTestConnection}
+                  disabled={isTestingConnection || !transactionServerIp || !transactionServerPort}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  {isTestingConnection && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isTestingConnection ? "Testing..." : "Test Connection"}
+                </Button>
+                <Button
+                  onClick={handleSaveServerSettings}
+                  disabled={!transactionServerIp || !transactionServerPort}
+                  className="flex-1"
+                >
+                  Save Settings
+                </Button>
               </div>
             </div>
           </CardContent>
           <CardFooter>
             <p className="text-xs text-gray-500">
-              These settings will be applied to all new transactions. Existing transactions will not be affected.
+              The transaction server handles all trading operations and must be running for bots to function.
             </p>
           </CardFooter>
         </Card>
       </div>
+
+      {/* Conversion Dialog */}
+      <Dialog open={isConversionDialogOpen} onOpenChange={setIsConversionDialogOpen}>
+        <DialogContent className="bg-black border-gray-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-amber-500" />
+              Convert WSOL to SOL
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Convert wrapped SOL (WSOL) to native SOL in your development wallet.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-gray-900 p-3 rounded-md">
+                <p className="text-sm text-gray-400 mb-1">Current WSOL Balance</p>
+                <p className="font-mono text-lg">{currentWsolBalance.toFixed(4)} WSOL</p>
+              </div>
+              <div className="bg-gray-900 p-3 rounded-md">
+                <p className="text-sm text-gray-400 mb-1">Current SOL Balance</p>
+                <p className="font-mono text-lg">{currentSolBalance.toFixed(4)} SOL</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="conversion-amount">Amount to Convert (WSOL)</Label>
+              <Input
+                id="conversion-amount"
+                type="number"
+                step="0.0001"
+                min="0.0001"
+                max={currentWsolBalance}
+                placeholder="Enter amount to convert"
+                value={conversionAmount}
+                onChange={(e) => setConversionAmount(e.target.value)}
+                className="bg-gray-900 border-gray-700"
+              />
+              <p className="text-xs text-gray-500">Maximum: {currentWsolBalance.toFixed(4)} WSOL</p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-3">
+            <Button variant="outline" onClick={() => setIsConversionDialogOpen(false)} className="flex-1">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSolWsolConversion}
+              disabled={
+                !conversionAmount ||
+                isNaN(Number.parseFloat(conversionAmount)) ||
+                Number.parseFloat(conversionAmount) <= 0 ||
+                Number.parseFloat(conversionAmount) > currentWsolBalance
+              }
+              className="flex-1"
+            >
+              Convert
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

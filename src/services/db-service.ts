@@ -7,6 +7,42 @@ import { encrypt, decrypt } from "./crypto-service"
 let db: Database | null = null
 
 /**
+ * Initialize the database connection
+ */
+export async function initializeDatabase(): Promise<Database> {
+  if (!db) {
+    db = await Database.load("sqlite:bossbundler.db")
+  }
+  return db
+}
+
+/**
+ * Execute a SQL query
+ */
+export async function executeQuery<T>(query: string, bindValues: any[] = []): Promise<T> {
+  const database = await initializeDatabase()
+  return database.execute(query, bindValues)
+}
+
+/**
+ * Execute a SQL query that returns multiple rows
+ */
+export async function executeQueryRows<T>(query: string, bindValues: any[] = []): Promise<T[]> {
+  const database = await initializeDatabase()
+  return database.select<T>(query, bindValues)
+}
+
+/**
+ * Close the database connection
+ */
+export async function closeDatabase(): Promise<void> {
+  if (db) {
+    await db.close()
+    db = null
+  }
+}
+
+/**
  * Initialize the database connection and create tables if they don't exist
  */
 export async function initDatabase(): Promise<void> {

@@ -2,18 +2,20 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
-import { Plus, Search } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { Plus, Copy, Trash2, Loader2, MoreVertical, AlertTriangle, CoinsIcon as CoinIcon } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Progress } from "@/components/ui/progress"
 
 interface VolumeTokenListProps {
   tokens: any[]
   selectedTokenId: string | null
   onSelectToken: (token: any) => void
   onAddToken: () => void
+  onDuplicateToken: (token: any) => void
+  onDeleteToken: (token: any) => void
   isLoading: boolean
+  anyBotRunning?: boolean
 }
 
 export function VolumeTokenList({
@@ -21,7 +23,10 @@ export function VolumeTokenList({
   selectedTokenId,
   onSelectToken,
   onAddToken,
+  onDuplicateToken,
+  onDeleteToken,
   isLoading,
+  anyBotRunning = false,
 }: VolumeTokenListProps) {
   const [searchQuery, setSearchQuery] = useState("")
 
@@ -33,85 +38,115 @@ export function VolumeTokenList({
 
   return (
     <div className="flex flex-col h-full">
- <div className="flex items-center justify-between p-2 m-3 rounded-lg text-[10px] bg-[#11111D]">        
-   <h2 className="text-sm font-medium text-[#ECF1F0]">Volume Bots</h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-4 w-4 p-0 bg-amber-700 hover:bg-amber-600 rounded-full"
-          onClick={onAddToken}
-        >
-          <Plus className="h-3.5 w-3.5 text-white" />
-        </Button> 
+      <div className="p-4 border-b border-gray-800 flex justify-between items-center">
+        <h2 className="text-lg font-medium">Tokens</h2>
+        <Button variant="outline" size="sm" onClick={onAddToken}>
+          <Plus className="mr-1 h-4 w-4" />
+          Add Token
+        </Button>
       </div>
 
-      <div className="p-3">
-        <div className="relative">
-          <Input
-            placeholder="Search tokens..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-gray-900/50 border-gray-800"
-          />
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-500" />
+      {isLoading ? (
+        <div className="flex-1 flex items-center justify-center p-4">
+          <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
         </div>
-      </div>
-
-      <ScrollArea className="flex-1">
-        <div className="p-2 space-y-1">
-          {isLoading ? (
-            // Loading skeletons
-            Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="p-3 rounded-md flex items-center space-x-3">
-                <Skeleton className="h-10 w-10 rounded-full" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-3 w-32" />
+      ) : tokens.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-4 text-gray-500">
+          <CoinIcon className="h-12 w-12 mb-4 opacity-20" />
+          <p className="text-center">No tokens added yet</p>
+          <Button variant="outline" className="mt-4" onClick={onAddToken}>
+            Add Your First Token
+          </Button>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto">
+          {tokens.map((token) => (
+            <div
+              key={token.id}
+              className={`p-3 border-b border-gray-800 cursor-pointer hover:bg-gray-900 transition-colors ${
+                selectedTokenId === token.id ? "bg-gray-900" : ""
+              }`}
+              onClick={() => onSelectToken(token)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <img src={token.logo || "/placeholder.svg"} alt={token.symbol} className="w-8 h-8 rounded-full" />
+                  <div>
+                    <h3 className="font-medium">
+                      {token.name} ({token.symbol})
+                    </h3>
+                    <div className="flex items-center text-sm text-gray-400">
+                      <span>${token.price?.toFixed(8)}</span>
+                      <span className={`ml-2 ${token.priceChange >= 0 ? "text-green-500" : "text-red-500"}`}>
+                        {token.priceChange >= 0 ? "+" : ""}
+                        {token.priceChange}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-1">
+                  {token.status === "active" && (
+                    <Badge variant="success" className="mr-2">
+                      Active
+                    </Badge>
+                  )}
+                  {token.status === "paused" && (
+                    <Badge variant="outline" className="mr-2">
+                      Paused
+                    </Badge>
+                  )}
+                  {token.status === "stopped" && (
+                    <Badge variant="destructive" className="mr-2">
+                      Stopped
+                    </Badge>
+                  )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDuplicateToken(token)
+                        }}
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDeleteToken(token)
+                        }}
+                        className="text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
-            ))
-          ) : filteredTokens.length > 0 ? (
-            filteredTokens.map((token) => (
-              <button
-                key={token.id}
-                className={`w-full p-3 rounded-md flex items-center space-x-3 text-left transition-colors ${
-                  selectedTokenId === token.id ? "bg-amber-500/10 text-amber-500" : "hover:bg-gray-800/50"
-                }`}
-                onClick={() => onSelectToken(token)}
-              >
-                <img src={token.logo || "/placeholder.svg"} alt={token.symbol} className="h-10 w-10 rounded-full" />
-                <div>
-                  <div className="flex items-center">
-                    <span className="font-medium">{token.symbol}</span>
-                    <Badge
-                      variant={token.status === "active" ? "default" : "secondary"}
-                      className={`ml-2 ${
-                        token.status === "active"
-                          ? "bg-green-500/20 text-green-400 hover:bg-green-500/20"
-                          : "bg-gray-700/50 text-gray-400 hover:bg-gray-700/50"
-                      }`}
-                    >
-                      {token.status === "active" ? "Active" : "Paused"}
-                    </Badge>
-                  </div>
-                  <div className="text-sm text-gray-400 flex items-center">
-                    <span>Progress: {token.progress}%</span>
-                  </div>
+              <div className="mt-2">
+                <div className="flex justify-between text-xs text-gray-400 mb-1">
+                  <span>Progress: {token.progress}%</span>
+                  <span>Target: {token.volumeTarget}</span>
                 </div>
-              </button>
-            ))
-          ) : (
-            <div className="p-8 text-center text-gray-500">
-              <p>No volume bots found</p>
-              <p className="text-sm mt-1">Create a new volume bot to get started</p>
-              <Button variant="outline" size="sm" className="mt-4" onClick={onAddToken}>
-                <Plus className="mr-1 h-4 w-4" />
-                Create Volume Bot
-              </Button>
+                <Progress value={token.progress} className="h-1" />
+              </div>
+              {token.status === "paused" && anyBotRunning && selectedTokenId === token.id && (
+                <div className="mt-2 text-xs text-amber-500">
+                  <AlertTriangle className="h-3 w-3 inline mr-1" />
+                  Another bot is currently running. Stop it first to start this one.
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
-      </ScrollArea>
+      )}
     </div>
   )
 }

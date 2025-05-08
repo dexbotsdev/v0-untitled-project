@@ -20,13 +20,15 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Set license as validated on client side
+  if (typeof window !== "undefined") {
+    localStorage.setItem("licenseValidated", "true")
+  }
+
   return (
     <html lang="en" className="dark">
       <body className={`${poppins.className} text-stone-200 antialiased`}>
-        <div className="flex min-h-screen flex-col">
-          {/* The children will be rendered directly for the license validator page */}
-          {children}
-        </div>
+        <div className="flex min-h-screen flex-col">{children}</div>
         <Toaster />
       </body>
     </html>
