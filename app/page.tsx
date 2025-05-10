@@ -20,8 +20,8 @@ export default function HomePage() {
       <div className="text-center">
         <div className="relative w-[600px] max-w-full mx-auto">
           <Image
-            src="/images/fab-logo-new.png"
-            alt="FAB Logo"
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/solvol.jpg-PUMob9GX9yIUdRhJfnrlyV8IVTg1wU.jpeg"
+            alt="SOAR Logo"
             width={980}
             height={340}
             priority

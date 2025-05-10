@@ -1,543 +1,247 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useToast } from "@/hooks/use-toast"
-import { AlertCircle, Server, Wallet, Loader2, ArrowRightLeft } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ArrowRightLeft, Settings, AlertCircle, Loader2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function SettingsPage() {
   const { toast } = useToast()
 
-  // State for wallet management
-  const [devWalletAddress, setDevWalletAddress] = useState("")
-  const [fundingWalletAddress, setFundingWalletAddress] = useState("")
-  const [importingDevWallet, setImportingDevWallet] = useState(false)
-  const [importingFundingWallet, setImportingFundingWallet] = useState(false)
-  const [generatingDevWallet, setGeneratingDevWallet] = useState(false)
-  const [generatingFundingWallet, setGeneratingFundingWallet] = useState(false)
-  const [privateKey, setPrivateKey] = useState("")
-
-  // Add these after the existing state variables
-  const [recoveringDevWallet, setRecoveringDevWallet] = useState(false)
-  const [recoveringFundingWallet, setRecoveringFundingWallet] = useState(false)
-  const [convertingDevWallet, setConvertingDevWallet] = useState(false)
-  const [convertingFundingWallet, setConvertingFundingWallet] = useState(false)
-
-  // Add these state variables after the other state declarations
+  // State for transaction server management
   const [transactionServerIp, setTransactionServerIp] = useState("127.0.0.1")
   const [transactionServerPort, setTransactionServerPort] = useState("8080")
-  const [isTestingConnection, setIsTestingConnection] = useState(false)
-  const [connectionStatus, setConnectionStatus] = useState<"idle" | "success" | "error">("idle")
+  const [isSavingTransactionServer, setIsSavingTransactionServer] = useState(false)
+  const [isTestingTransactionServer, setIsTestingTransactionServer] = useState(false)
+  const [transactionServerStatus, setTransactionServerStatus] = useState<"idle" | "success" | "error">("idle")
 
-  // Add state for conversion dialog
-  const [isConversionDialogOpen, setIsConversionDialogOpen] = useState(false)
-  const [conversionAmount, setConversionAmount] = useState("")
-  const [currentWsolBalance, setCurrentWsolBalance] = useState(0.75) // Mock balance
-  const [currentSolBalance, setCurrentSolBalance] = useState(1.25) // Mock balance
+  // Load Transaction Server settings from localStorage on component mount
+  useEffect(() => {
+    const loadSettings = () => {
+      try {
+        // Load Transaction Server settings
+        const savedTransactionServerIp = localStorage.getItem("transactionServerIp")
+        const savedTransactionServerPort = localStorage.getItem("transactionServerPort")
+        if (savedTransactionServerIp) {
+          setTransactionServerIp(savedTransactionServerIp)
+        }
+        if (savedTransactionServerPort) {
+          setTransactionServerPort(savedTransactionServerPort)
+        }
 
-  // Handle wallet import
-  const handleImportWallet = async (type: "dev" | "funding") => {
-    if (!privateKey) {
-      toast({
-        title: "Error",
-        description: "Please enter a private key",
-        variant: "destructive",
-      })
-      return
+        console.log("Transaction Server settings loaded from localStorage:", {
+          ip: savedTransactionServerIp || "default: 127.0.0.1",
+          port: savedTransactionServerPort || "default: 8080",
+        })
+      } catch (error) {
+        console.error("Error loading settings from localStorage:", error)
+      }
     }
 
-    if (type === "dev") {
-      setImportingDevWallet(true)
-    } else {
-      setImportingFundingWallet(true)
-    }
+    loadSettings()
+  }, [])
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    const mockAddress = `0x${Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`
-
-    if (type === "dev") {
-      setDevWalletAddress(mockAddress)
-      setImportingDevWallet(false)
-    } else {
-      setFundingWalletAddress(mockAddress)
-      setImportingFundingWallet(false)
-    }
-
-    setPrivateKey("")
-
-    toast({
-      title: "Success",
-      description: `${type === "dev" ? "Development" : "Funding"} wallet imported successfully`,
-    })
-  }
-
-  // Handle wallet generation
-  const handleGenerateWallet = async (type: "dev" | "funding") => {
-    if (type === "dev") {
-      setGeneratingDevWallet(true)
-    } else {
-      setGeneratingFundingWallet(true)
-    }
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    const mockAddress = `0x${Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`
-
-    if (type === "dev") {
-      setDevWalletAddress(mockAddress)
-      setGeneratingDevWallet(false)
-    } else {
-      setFundingWalletAddress(mockAddress)
-      setGeneratingFundingWallet(false)
-    }
-
-    toast({
-      title: "Success",
-      description: `New ${type === "dev" ? "development" : "funding"} wallet generated`,
-    })
-  }
-
-  // Handle wallet recovery
-  const handleRecoverWallet = async (type: "dev" | "funding") => {
-    if (type === "dev" && !devWalletAddress) {
-      toast({
-        title: "Error",
-        description: "No development wallet address found",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (type === "funding" && !fundingWalletAddress) {
-      toast({
-        title: "Error",
-        description: "No funding wallet address found",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (type === "dev") {
-      setRecoveringDevWallet(true)
-    } else {
-      setRecoveringFundingWallet(true)
-    }
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    if (type === "dev") {
-      setRecoveringDevWallet(false)
-    } else {
-      setRecoveringFundingWallet(false)
-    }
-
-    toast({
-      title: "Recovery Successful",
-      description: `Successfully recovered funds from ${type === "dev" ? "development" : "funding"} wallet`,
-    })
-  }
-
-  // Handle opening the conversion dialog
-  const handleOpenConversionDialog = () => {
-    if (!devWalletAddress) {
-      toast({
-        title: "Error",
-        description: "No development wallet address found",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Fetch current balances (mock for now)
-    setCurrentWsolBalance(0.75)
-    setCurrentSolBalance(1.25)
-    setConversionAmount("")
-    setIsConversionDialogOpen(true)
-  }
-
-  // Handle SOL-WSOL conversion
-  const handleSolWsolConversion = async () => {
-    if (!devWalletAddress) {
-      toast({
-        title: "Error",
-        description: "No development wallet address found",
-        variant: "destructive",
-      })
-      return
-    }
-
-    if (!conversionAmount || isNaN(Number.parseFloat(conversionAmount)) || Number.parseFloat(conversionAmount) <= 0) {
-      toast({
-        title: "Error",
-        description: "Please enter a valid amount to convert",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const amount = Number.parseFloat(conversionAmount)
-    if (amount > currentWsolBalance) {
-      toast({
-        title: "Error",
-        description: "Conversion amount exceeds available WSOL balance",
-        variant: "destructive",
-      })
-      return
-    }
-
-    setConvertingDevWallet(true)
-    setIsConversionDialogOpen(false)
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    // Update balances (mock)
-    setCurrentWsolBalance((prev) => prev - amount)
-    setCurrentSolBalance((prev) => prev + amount)
-
-    setConvertingDevWallet(false)
-
-    toast({
-      title: "Conversion Successful",
-      description: `Successfully converted ${amount} WSOL to SOL for development wallet`,
-    })
-  }
-
-  // Add this function after the other handler functions
-  const handleTestConnection = async () => {
-    // Validate inputs
+  // Handle saving Transaction Server settings
+  const handleSaveTransactionServer = async () => {
     if (!transactionServerIp || !transactionServerPort) {
       toast({
-        title: "Validation Error",
-        description: "Please enter both IP address and port",
+        title: "Error",
+        description: "Please enter both IP and Port",
         variant: "destructive",
       })
       return
     }
 
-    setIsTestingConnection(true)
-    setConnectionStatus("idle")
+    // Validate IP address format
+    const ipRegex =
+      /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+    if (!ipRegex.test(transactionServerIp)) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid IP address",
+        variant: "destructive",
+      })
+      return
+    }
 
-    // Simulate API call to test connection
+    // Validate port number
+    const portNumber = Number.parseInt(transactionServerPort)
+    if (isNaN(portNumber) || portNumber < 1 || portNumber > 65535) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid port number (1-65535)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSavingTransactionServer(true)
+
     try {
+      // Save to localStorage
+      localStorage.setItem("transactionServerIp", transactionServerIp)
+      localStorage.setItem("transactionServerPort", transactionServerPort)
+
+      console.log("Transaction Server settings saved to localStorage:", {
+        ip: transactionServerIp,
+        port: transactionServerPort,
+      })
+
+      toast({
+        title: "Success",
+        description: "Transaction Server settings saved successfully",
+      })
+
+      setTransactionServerStatus("success")
+    } catch (error) {
+      console.error("Error saving Transaction Server settings:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save Transaction Server settings",
+        variant: "destructive",
+      })
+      setTransactionServerStatus("error")
+    } finally {
+      setIsSavingTransactionServer(false)
+    }
+  }
+
+  // Handle testing Transaction Server connection
+  const handleTestTransactionServer = async () => {
+    if (!transactionServerIp || !transactionServerPort) {
+      toast({
+        title: "Error",
+        description: "Please enter both IP and Port",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsTestingTransactionServer(true)
+    setTransactionServerStatus("idle")
+
+    try {
+      // Simulate testing the connection
+      // In a real app, you would make an actual API call to test the connection
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
       // For demo purposes, we'll randomly succeed or fail
-      const isSuccess = Math.random() > 0.3
+      const isSuccess = Math.random() > 0.3 // 70% chance of success
 
       if (isSuccess) {
-        setConnectionStatus("success")
         toast({
           title: "Connection Successful",
-          description: `Successfully connected to ${transactionServerIp}:${transactionServerPort}`,
+          description: `Connected to Transaction Server at ${transactionServerIp}:${transactionServerPort}`,
         })
+        setTransactionServerStatus("success")
       } else {
-        setConnectionStatus("error")
-        toast({
-          title: "Connection Failed",
-          description: "Could not connect to the transaction server",
-          variant: "destructive",
-        })
+        throw new Error("Connection failed")
       }
     } catch (error) {
-      setConnectionStatus("error")
+      console.error("Error testing Transaction Server connection:", error)
       toast({
-        title: "Connection Error",
-        description: "An error occurred while testing the connection",
+        title: "Connection Failed",
+        description: "Failed to connect to the Transaction Server. Please check the IP and Port and try again.",
         variant: "destructive",
       })
+      setTransactionServerStatus("error")
     } finally {
-      setIsTestingConnection(false)
+      setIsTestingTransactionServer(false)
     }
-  }
-
-  const handleSaveServerSettings = () => {
-    // Validate inputs
-    if (!transactionServerIp || !transactionServerPort) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter both IP address and port",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Save settings
-    toast({
-      title: "Settings Saved",
-      description: "Transaction server settings have been saved",
-    })
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold mb-4">Settings</h1>
-        <p className="text-muted-foreground">Manage your application settings and database</p>
+    <div className="container mx-auto px-4 sm:px-6 py-8 space-y-8">
+      <div className="flex flex-col gap-2 mb-8 px-1">
+        <div className="flex items-center gap-2">
+          <Settings className="h-6 w-6 text-amber-500" />
+          <h1 className="text-2xl font-bold">Settings</h1>
+        </div>
+        <p className="text-muted-foreground">Manage your application settings</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Wallet Management Card - Keep this from the original */}
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Transaction Server Configuration Card */}
         <Card className="bg-black border-gray-800">
-          <CardHeader>
+          <CardHeader className="px-6 pt-6 pb-2">
             <CardTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5 text-amber-500" />
-              Wallet Management
+              <ArrowRightLeft className="h-5 w-5 text-amber-500" />
+              Transaction Server Configuration
             </CardTitle>
-            <CardDescription>Configure your development and funding wallets</CardDescription>
+            <CardDescription>Configure the Transaction Server for processing trades</CardDescription>
           </CardHeader>
-          {/* Keep the existing CardContent for wallet management */}
-          <CardContent className="space-y-6">
-            {/* Existing wallet management content */}
-            <div className="space-y-2">
-              <Label htmlFor="dev-wallet">Development Wallet Address</Label>
-              <Input
-                id="dev-wallet"
-                type="text"
-                placeholder="0x..."
-                value={devWalletAddress}
-                onChange={(e) => setDevWalletAddress(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="funding-wallet">Funding Wallet Address</Label>
-              <Input
-                id="funding-wallet"
-                type="text"
-                placeholder="0x..."
-                value={fundingWalletAddress}
-                onChange={(e) => setFundingWalletAddress(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="private-key">Private Key</Label>
-              <Input
-                id="private-key"
-                type="password"
-                placeholder="Enter private key"
-                value={privateKey}
-                onChange={(e) => setPrivateKey(e.target.value)}
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={() => handleImportWallet("dev")}
-                disabled={importingDevWallet}
-                variant="outline"
-                className="flex-1"
-              >
-                {importingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {importingDevWallet ? "Importing..." : "Import Dev Wallet"}
-              </Button>
-              <Button onClick={() => handleGenerateWallet("dev")} disabled={generatingDevWallet} className="flex-1">
-                {generatingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {generatingDevWallet ? "Generating..." : "Generate Dev Wallet"}
-              </Button>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={() => handleImportWallet("funding")}
-                disabled={importingFundingWallet}
-                variant="outline"
-                className="flex-1"
-              >
-                {importingFundingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {importingFundingWallet ? "Importing..." : "Import Funding Wallet"}
-              </Button>
-              <Button
-                onClick={() => handleGenerateWallet("funding")}
-                disabled={generatingFundingWallet}
-                className="flex-1"
-              >
-                {generatingFundingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {generatingFundingWallet ? "Generating..." : "Generate Funding Wallet"}
-              </Button>
-            </div>
-
-            <div className="flex">
-              <Button
-                onClick={() => handleRecoverWallet("dev")}
-                disabled={recoveringDevWallet}
-                variant="secondary"
-                className="w-full"
-              >
-                {recoveringDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {recoveringDevWallet ? "Recovering..." : "Recover Dev Wallet"}
-              </Button>
-            </div>
-
-            <div className="flex">
-              <Button
-                onClick={handleOpenConversionDialog}
-                disabled={convertingDevWallet || !devWalletAddress}
-                variant="secondary"
-                className="w-full"
-              >
-                {convertingDevWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {convertingDevWallet ? "Converting..." : "Convert Dev WSOL ↔ SOL"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Transaction Server Card */}
-        <Card className="bg-black border-gray-800">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Server className="h-5 w-5 text-amber-500" />
-              Transaction Server
-            </CardTitle>
-            <CardDescription>Configure connection to the transaction server</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {connectionStatus === "error" && (
+          <CardContent className="space-y-6 p-6">
+            {transactionServerStatus === "error" && (
               <Alert variant="destructive" className="bg-red-900/20 border-red-900 text-red-400">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  Failed to connect to the transaction server. Please check your settings and try again.
+                  Failed to connect to the Transaction Server. Please check the IP and Port and try again.
                 </AlertDescription>
               </Alert>
             )}
 
-            {connectionStatus === "success" && (
+            {transactionServerStatus === "success" && (
               <Alert className="bg-green-900/20 border-green-900 text-green-400">
                 <AlertCircle className="h-4 w-4" />
-                <AlertDescription>Successfully connected to the transaction server.</AlertDescription>
+                <AlertDescription>Successfully connected to the Transaction Server.</AlertDescription>
               </Alert>
             )}
 
-            <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="server-ip">Server IP Address</Label>
+                <Label htmlFor="transaction-server-ip">Server IP Address</Label>
                 <Input
-                  id="server-ip"
+                  id="transaction-server-ip"
                   type="text"
-                  placeholder="e.g. 192.168.1.100"
+                  placeholder="127.0.0.1"
                   value={transactionServerIp}
                   onChange={(e) => setTransactionServerIp(e.target.value)}
                 />
               </div>
-
               <div className="space-y-2">
-                <Label htmlFor="server-port">Server Port</Label>
+                <Label htmlFor="transaction-server-port">Server Port</Label>
                 <Input
-                  id="server-port"
+                  id="transaction-server-port"
                   type="text"
-                  placeholder="e.g. 8080"
+                  placeholder="8080"
                   value={transactionServerPort}
                   onChange={(e) => setTransactionServerPort(e.target.value)}
                 />
               </div>
+            </div>
 
-              <div className="flex gap-3">
-                <Button
-                  onClick={handleTestConnection}
-                  disabled={isTestingConnection || !transactionServerIp || !transactionServerPort}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  {isTestingConnection && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isTestingConnection ? "Testing..." : "Test Connection"}
-                </Button>
-                <Button
-                  onClick={handleSaveServerSettings}
-                  disabled={!transactionServerIp || !transactionServerPort}
-                  className="flex-1"
-                >
-                  Save Settings
-                </Button>
-              </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={handleTestTransactionServer}
+                disabled={isTestingTransactionServer || !transactionServerIp || !transactionServerPort}
+                variant="outline"
+                className="flex-1"
+              >
+                {isTestingTransactionServer && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isTestingTransactionServer ? "Testing..." : "Test Connection"}
+              </Button>
+              <Button
+                onClick={handleSaveTransactionServer}
+                disabled={isSavingTransactionServer || !transactionServerIp || !transactionServerPort}
+                className="flex-1"
+              >
+                {isSavingTransactionServer && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSavingTransactionServer ? "Saving..." : "Save Settings"}
+              </Button>
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="px-6 py-4 bg-black/30">
             <p className="text-xs text-gray-500">
-              The transaction server handles all trading operations and must be running for bots to function.
+              The Transaction Server processes all trading operations. Ensure the server is running and accessible from
+              this machine.
             </p>
           </CardFooter>
         </Card>
       </div>
-
-      {/* Conversion Dialog */}
-      <Dialog open={isConversionDialogOpen} onOpenChange={setIsConversionDialogOpen}>
-        <DialogContent className="bg-black border-gray-800 text-white">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ArrowRightLeft className="h-5 w-5 text-amber-500" />
-              Convert WSOL to SOL
-            </DialogTitle>
-            <DialogDescription className="text-gray-400">
-              Convert wrapped SOL (WSOL) to native SOL in your development wallet.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-900 p-3 rounded-md">
-                <p className="text-sm text-gray-400 mb-1">Current WSOL Balance</p>
-                <p className="font-mono text-lg">{currentWsolBalance.toFixed(4)} WSOL</p>
-              </div>
-              <div className="bg-gray-900 p-3 rounded-md">
-                <p className="text-sm text-gray-400 mb-1">Current SOL Balance</p>
-                <p className="font-mono text-lg">{currentSolBalance.toFixed(4)} SOL</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="conversion-amount">Amount to Convert (WSOL)</Label>
-              <Input
-                id="conversion-amount"
-                type="number"
-                step="0.0001"
-                min="0.0001"
-                max={currentWsolBalance}
-                placeholder="Enter amount to convert"
-                value={conversionAmount}
-                onChange={(e) => setConversionAmount(e.target.value)}
-                className="bg-gray-900 border-gray-700"
-              />
-              <p className="text-xs text-gray-500">Maximum: {currentWsolBalance.toFixed(4)} WSOL</p>
-            </div>
-          </div>
-
-          <DialogFooter className="flex gap-3">
-            <Button variant="outline" onClick={() => setIsConversionDialogOpen(false)} className="flex-1">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSolWsolConversion}
-              disabled={
-                !conversionAmount ||
-                isNaN(Number.parseFloat(conversionAmount)) ||
-                Number.parseFloat(conversionAmount) <= 0 ||
-                Number.parseFloat(conversionAmount) > currentWsolBalance
-              }
-              className="flex-1"
-            >
-              Convert
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -1,11 +1,11 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { Settings, HelpCircle, BarChart2, TrendingUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { BossLogo } from "@/components/boss-logo"
 
 export function Sidebar() {
   const pathname = usePathname()
@@ -36,7 +36,7 @@ export function Sidebar() {
   return (
     <div className="flex flex-col h-screen bg-black border-r border-gray-800 w-16">
       <div className="flex items-center justify-center h-16 border-b border-gray-800">
-        <BossLogo />
+        <Image src="/images/iconLogo2.png" alt="Boss Logo" width={80} height={80} className="object-contain" />
       </div>
       <div className="flex-1 overflow-y-auto py-2">
         <nav className="px-2 space-y-1">

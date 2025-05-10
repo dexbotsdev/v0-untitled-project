@@ -76,11 +76,7 @@ export function VolumeTokenList({
                       {token.name} ({token.symbol})
                     </h3>
                     <div className="flex items-center text-sm text-gray-400">
-                      <span>${token.price?.toFixed(8)}</span>
-                      <span className={`ml-2 ${token.priceChange >= 0 ? "text-green-500" : "text-red-500"}`}>
-                        {token.priceChange >= 0 ? "+" : ""}
-                        {token.priceChange}%
-                      </span>
+                      <span>Progress: {token.progress}%</span>
                     </div>
                   </div>
                 </div>
@@ -131,10 +127,6 @@ export function VolumeTokenList({
                 </div>
               </div>
               <div className="mt-2">
-                <div className="flex justify-between text-xs text-gray-400 mb-1">
-                  <span>Progress: {token.progress}%</span>
-                  <span>Target: {token.volumeTarget}</span>
-                </div>
                 <Progress value={token.progress} className="h-1" />
               </div>
               {token.status === "paused" && anyBotRunning && selectedTokenId === token.id && (
