@@ -10,78 +10,66 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-// Token information model
+// Combined Token model with bot settings
 model Token {
-  id           String   @id @default(cuid())
-  name         String
-  symbol       String
-  address      String   @unique
-  description  String?
-  logo         String?  // URL to logo image
-  price        Float?
-  priceChange  Float?
-  marketCap    Float?
-  holders      Int?
-  liquidity    Float?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String    @id @default(cuid())
+  name             String
+  symbol           String
+  address          String    @unique
+  description      String?
+  logo             String?   // URL to logo image
+  marketCap        Float?
+  holders          Int?
+  liquidity        Float?
+  
+  // Bot settings fields (merged from BotSettings)
+  minTradeAmount   Float?    // in SOL
+  maxTradeAmount   Float?    // in SOL
+  duration         Int?      // in hours
+  strategy         String?   // bump, turbo, microbuys, pattern
+  tradesPerMinute  Int?
+  numberOfWallets  Int?
+  useAntiMev       Boolean   @default(false)
+  tipAmount        Int       @default(10000) // in LAMPORTS
+  priorityFees     Int       @default(10000) // in LAMPORTS
+  slippage         Float     @default(5) // percentage
+  startTime        DateTime?
+  endTime          DateTime?
   
   // Status
-  status       String   @default("paused") // active, paused
-  progress     Float    @default(0) // percentage of volume target achieved
-  volumeTarget Float?   // target volume in USD
+  status           String    @default("paused") // active, paused
+  progress         Float     @default(0) // percentage of volume target achieved
+  volumeTarget     String?   // Target volume as a formatted string (e.g., "50,000 USDC")
+  
+  // Timestamps
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
   
   // Relations
-  botSettings  BotSettings?
-  wallets      Wallet[]
-  transactions Transaction[]
+  wallets          Wallet[]
+  transactions     Transaction[]
   
   @@map("tokens")
 }
 
-// Bot settings model
-model BotSettings {
-  id                String   @id @default(cuid())
-  minTradeAmount    Float    // in SOL
-  maxTradeAmount    Float    // in SOL
-  duration          Int      // in hours
-  strategy          String   // bump, turbo, microbuys, pattern
-  tradesPerMinute   Int
-  numberOfWallets   Int
-  useAntiMev        Boolean  @default(false)
-  tipAmount         Int      @default(10000) // in LAMPORTS
-  priorityFees      Int      @default(10000) // in LAMPORTS
-  slippage          Float    @default(5) // percentage
-  startTime         DateTime?
-  endTime           DateTime?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  
-  // Relations
-  tokenId           String   @unique
-  token             Token    @relation(fields: [tokenId], references: [id], onDelete: Cascade)
-  
-  @@map("bot_settings")
-}
-
 // Wallet model
 model Wallet {
-  id             String   @id @default(cuid())
-  address        String   @unique
+  id             String    @id @default(cuid())
+  address        String    @unique
   // IMPORTANT: In production, encrypt this field or use a secure vault service
-  privateKey     String?  // Encrypted private key
-  solBalance     Float    @default(0)
-  tokenBalance   Float    @default(0)
-  tradesCount    Int      @default(0)
+  privateKey     String?   // Encrypted private key
+  solBalance     Float     @default(0)
+  tokenBalance   Float     @default(0)
+  tradesCount    Int       @default(0)
   lastTrade      DateTime?
-  isDevWallet    Boolean  @default(false)
-  isFundingWallet Boolean @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isDevWallet    Boolean   @default(false)
+  isFundingWallet Boolean  @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   
   // Relations
   tokenId        String?
-  token          Token?   @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  token          Token?    @relation(fields: [tokenId], references: [id], onDelete: SetNull)
   transactions   Transaction[]
   
   @@index([tokenId])
@@ -90,48 +78,36 @@ model Wallet {
 
 // Transaction model
 model Transaction {
-  id             String   @id @default(cuid())
-  type           String   // buy, sell
-  amount         Float    // in SOL
-  tokenAmount    Float    // amount of tokens
-  price          Float    // price at transaction time
-  txHash         String?  // blockchain transaction hash
-  status         String   @default("pending") // pending, completed, failed
-  fee            Float?   // transaction fee in SOL
-  priorityFee    Int?     // in LAMPORTS
-  createdAt      DateTime @default(now())
+  id             String    @id @default(cuid())
+  type           String    // buy, sell
+  amount         Float     // in SOL
+  tokenAmount    Float     // amount of tokens
+  price          Float     // price at transaction time
+  txHash         String?   // blockchain transaction hash
+  status         String    @default("pending") // pending, completed, failed
+  fee            Float?    // transaction fee in SOL
+  priorityFee    Int?      // in LAMPORTS
+  createdAt      DateTime  @default(now())
   completedAt    DateTime?
   
   // Relations
   walletId       String
-  wallet         Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet         Wallet    @relation(fields: [walletId], references: [id], onDelete: Cascade)
   tokenId        String
-  token          Token    @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  token          Token     @relation(fields: [tokenId], references: [id], onDelete: Cascade)
   
   @@index([walletId])
   @@index([tokenId])
   @@map("transactions")
 }
 
-// License model
-model License {
-  id             String   @id @default(cuid())
-  key            String   @unique
-  isActive       Boolean  @default(true)
-  activatedAt    DateTime?
-  expiresAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  
-  @@map("licenses")
-}
-
-// System settings model
+// Updated System settings model
 model SystemSettings {
-  id                 String   @id @default(cuid())
-  antiBubblemap      Boolean  @default(false)
-  defaultPriorityFee Float    @default(1.5) // in GWEI
-  updatedAt          DateTime @updatedAt
+  id             String    @id @default(cuid())
+  apiEndpointIP  String    @default("127.0.0.1")  // API endpoint IP address
+  apiEndpointPort String   @default("8080")       // API endpoint port
+  apiKey         String?                          // Optional API key for authentication
+  updatedAt      DateTime  @updatedAt
   
   @@map("system_settings")
 }
