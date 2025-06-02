@@ -28,7 +28,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${poppins.className} text-stone-200 antialiased`}>
-        <div className="flex min-h-screen flex-col">{children}</div>
+        <div className="flex min-h-screen w-full flex-col">{children}</div>
         <Toaster />
       </body>
     </html>

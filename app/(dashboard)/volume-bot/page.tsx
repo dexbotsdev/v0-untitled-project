@@ -395,7 +395,7 @@ export default function VolumeBotPage() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 p-6 overflow-auto">
         {/* Empty State */}
         {bots.length === 0 && (
           <div className="flex flex-col items-center justify-center mt-12 p-8 bg-[#191929] rounded-lg border border-gray-800">

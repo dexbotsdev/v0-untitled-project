@@ -68,7 +68,7 @@ export default function HelpPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-8 overflow-y-auto">
+    <div className="w-full p-6 space-y-8 overflow-y-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
           <HelpCircle className="h-8 w-8 text-amber-500" />

@@ -13,7 +13,7 @@ export default function DashboardLayout({
   return (
     <div className="flex h-screen overflow-hidden">
       <VolumeBotSDKInitializer />
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen w-full flex-col">
         <AutoLicenseValidator />
         <div className="h-auto py-1 m-1 flex flex-col sm:flex-row items-center justify-between px-2 sm:px-5 gap-2">
           <div className="flex items-center gap-2">

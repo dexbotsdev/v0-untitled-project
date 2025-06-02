@@ -223,7 +223,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 space-y-8">
+    <div className="w-full px-4 sm:px-6 py-8 space-y-8">
       <div className="flex flex-col gap-2 mb-8 px-1">
         <div className="flex items-center gap-2">
           <Settings className="h-6 w-6 text-amber-500" />
