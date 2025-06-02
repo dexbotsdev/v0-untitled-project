@@ -70,8 +70,6 @@ export function CreateBundlerDialog({ open, onOpenChange, onCreateBot }: CreateB
     onCreateBot({
       tokenSymbol: tokenMetadata.symbol || "TOKEN",
       tokenAddress: "Generated on creation",
-      budget: walletManagement.customWallets.reduce((sum, wallet) => sum + wallet.amount, 0),
-      targetVolume: 50000,
       wallets:
         walletManagement.selectedGroup === "custom"
           ? walletManagement.customWallets.length
@@ -80,8 +78,6 @@ export function CreateBundlerDialog({ open, onOpenChange, onCreateBot }: CreateB
             : walletManagement.selectedGroup === "group-2"
               ? 25
               : 50,
-      bundleSize: 5,
-      trades: 200,
       tokenMetadata,
       tokenConfig,
       devTradingSettings,
@@ -165,7 +161,7 @@ export function CreateBundlerDialog({ open, onOpenChange, onCreateBot }: CreateB
             </Button>
 
             {activeTab === "wallet-management" ? (
-              <Button onClick={handleCreate}   className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button onClick={handleCreate} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Create Bundler Bot
               </Button>
             ) : (

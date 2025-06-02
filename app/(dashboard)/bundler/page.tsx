@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Plus, RefreshCw, Package, Trash2, AlertCircle } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import { CreateBundlerDialog } from "@/components/bundler/create-bundler-dialog"
 import { TagBundlesDialog } from "@/components/bundler/tag-bundles-dialog"
 import { ActivityLogger } from "@/components/bundler/activity-logger"
@@ -23,7 +22,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { DevTradingSettingsSection } from "@/components/bundler/dev-trading-settings-section"
-import { Input } from "@/components/ui/input"
 
 export default function BundlerPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -45,38 +43,10 @@ export default function BundlerPage() {
       name: `Bundler Bot ${activeBots.length + 1}`,
       tokenSymbol: botConfig.tokenSymbol || "TOKEN",
       tokenAddress: botConfig.tokenAddress,
-      budget: botConfig.budget,
-      targetVolume: botConfig.targetVolume,
       wallets: botConfig.wallets || 40,
-      bundleSize: botConfig.bundleSize || 5,
-      bundles: botConfig.trades || 200,
       progress: 0,
       status: "ready", // ready, active, paused, completed
       createdAt: new Date().toISOString(),
-      stats: {
-        tokensTraded: 0,
-        volumeGenerated: 0,
-        bundlesCompleted: 0,
-        walletsUsed: 0,
-        feesSpent: 0,
-        bundlesGenerated: 0,
-        walletsFunded: 0,
-      },
-      // Mock bundle data for demonstration
-      bundleData: Array(40)
-        .fill(0)
-        .map((_, i) => ({
-          id: `bundle-${i}`,
-          wallets: Array(botConfig.bundleSize || 5)
-            .fill(0)
-            .map((_, j) => `${i}-${j}xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg`),
-          status: i < 10 ? "executed" : i < 25 ? "prepared" : "pending",
-          solBalance: i < 10 ? 0.001 : i < 25 ? 0.006 : 0,
-          tokenBalance: i < 10 ? 1 : 0,
-          transactionCount: botConfig.bundleSize || 5,
-          lastExecution: i < 10 ? new Date().toISOString() : null,
-          tag: i < 5 ? "bundler" : null,
-        })),
       tokenMetadata: botConfig.tokenMetadata || {
         name: botConfig.tokenSymbol || "Token",
         symbol: botConfig.tokenSymbol || "TOKEN",
@@ -102,37 +72,6 @@ export default function BundlerPage() {
         selectedGroup: "group-1",
         customWallets: [],
       },
-      // Additional token market data
-      marketData: {
-        currentPrice: 0.00000123,
-        marketCap: 123000,
-        bondingCurvePercentage: 5.5,
-        startTime: null,
-        endTime: null,
-      },
-      // Bundle wallets data
-      bundleWallets: Array(20)
-        .fill(0)
-        .map((_, i) => ({
-          id: `bundle-wallet-${i}`,
-          address: `BW${i}xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg`,
-          solBalance: Math.random() * 0.1,
-          tokenBalance: Math.random() * 1000,
-          status: i < 5 ? "active" : i < 15 ? "ready" : "empty",
-          lastUsed: i < 5 ? new Date().toISOString() : null,
-        })),
-      // Bump wallets data
-      bumpWallets: Array(10)
-        .fill(0)
-        .map((_, i) => ({
-          id: `bump-wallet-${i}`,
-          address: `BP${i}xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg`,
-          solBalance: Math.random() * 0.05,
-          tokenBalance: Math.random() * 500,
-          status: i < 3 ? "active" : i < 8 ? "ready" : "empty",
-          lastBump: i < 3 ? new Date().toISOString() : null,
-          bumpCount: Math.floor(Math.random() * 10),
-        })),
     }
 
     setActiveBots((prev) => [...prev, newBot])
@@ -383,39 +322,6 @@ export default function BundlerPage() {
                       </div>
                       <div>
                         <div className="text-sm font-semibold text-white">{bot.tokenSymbol}</div>
-                        <Badge
-                          className={`text-xs ${
-                            bot.marketData?.startTime
-                              ? bot.marketData?.endTime
-                                ? "bg-blue-600/20 text-blue-400"
-                                : "bg-green-600/20 text-green-400"
-                              : "bg-gray-600/20 text-gray-400"
-                          }`}
-                        >
-                          {bot.marketData?.startTime ? (bot.marketData?.endTime ? "Ended" : "Started") : "Ready"}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Token Information Grid */}
-                    <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                      <div>
-                        <span className="text-gray-500">Dev Buy:</span>{" "}
-                        <span className="text-gray-300">{bot.devTradingSettings?.devBuyAmount || 0} SOL</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Mcap:</span>{" "}
-                        <span className="text-gray-300">${formatNumber(bot.marketData?.marketCap || 0)}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Price:</span>{" "}
-                        <span className="text-gray-300 font-mono">
-                          ${(bot.marketData?.currentPrice || 0).toFixed(6)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500">Curve:</span>{" "}
-                        <span className="text-gray-300">{bot.marketData?.bondingCurvePercentage || 0}%</span>
                       </div>
                     </div>
 
@@ -425,7 +331,6 @@ export default function BundlerPage() {
                         <span className="text-gray-400">Progress</span>
                         <span className="text-blue-400">{bot.progress}%</span>
                       </div>
-                      <Progress value={bot.progress} className="h-1 bg-gray-800" indicatorClassName="bg-blue-500" />
                     </div>
                   </CardContent>
                 </Card>
@@ -514,87 +419,14 @@ export default function BundlerPage() {
                         <TabsTrigger value="dev-trading" className="data-[state=active]:bg-gray-700">
                           Dev Trading Settings
                         </TabsTrigger>
-                        <TabsTrigger value="bundle-wallets" className="data-[state=active]:bg-gray-700">
-                          Bundle Wallets
-                        </TabsTrigger>
-                        <TabsTrigger value="bump-wallets" className="data-[state=active]:bg-gray-700">
-                          Bump Wallets
-                        </TabsTrigger>
                       </TabsList>
 
                       <TabsContent value="statistics" className="mt-0">
-                        {/* Stats Cards - Removed Token Info Card */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                          <StatCard
-                            title="Tokens Traded"
-                            value={formatNumber(selectedBot.stats.tokensTraded)}
-                            suffix={selectedBot.tokenSymbol}
-                          />
-                          <StatCard
-                            title="Volume Generated"
-                            value={formatNumber(selectedBot.stats.volumeGenerated)}
-                            prefix="$"
-                          />
-                          <StatCard
-                            title="Bundles Completed"
-                            value={`${selectedBot.stats.bundlesCompleted}/${selectedBot.bundles}`}
-                          />
-                          <StatCard
-                            title="Wallets Used"
-                            value={`${selectedBot.stats.walletsUsed}/${selectedBot.wallets}`}
-                          />
-                        </div>
-
-                        <Card className="border-gray-800 bg-gray-900/30">
-                          <CardHeader className="p-4 pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-400">
-                              Bundle Execution Progress
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="p-4 pt-0">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="text-lg font-semibold text-blue-400">{selectedBot.progress}%</div>
-                              <div className="text-xs text-gray-400">
-                                {Math.floor((selectedBot.progress * selectedBot.bundles) / 100)} / {selectedBot.bundles}{" "}
-                                bundles
-                              </div>
-                            </div>
-                            <Progress
-                              value={selectedBot.progress}
-                              className="h-2 bg-gray-800"
-                              indicatorClassName="bg-blue-500"
-                            />
-
-                            <div className="mt-4 grid grid-cols-2 gap-4">
-                              <div>
-                                <h4 className="text-xs font-medium text-gray-400 mb-2">Bundle Wallet</h4>
-                                <div className="bg-gray-800/50 p-2 rounded text-xs font-mono text-gray-300 truncate">
-                                  4xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg
-                                </div>
-                                <div className="mt-1 text-xs text-gray-400">Balance: 2.45 SOL</div>
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-medium text-gray-400 mb-2">Token Details</h4>
-                                <div className="bg-gray-800/50 p-2 rounded text-xs font-mono text-gray-300 truncate">
-                                  {selectedBot.tokenAddress || "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg"}
-                                </div>
-                                <div className="mt-1 text-xs text-gray-400">Current Price: $0.00000123</div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+                        <DevTradingSettingsSection devTradingSettings={selectedBot.devTradingSettings} />
                       </TabsContent>
 
                       <TabsContent value="dev-trading" className="mt-0">
                         <DevTradingSettingsSection devTradingSettings={selectedBot.devTradingSettings} />
-                      </TabsContent>
-
-                      <TabsContent value="bundle-wallets" className="mt-0">
-                        <BundleWalletsSection bundleWallets={selectedBot.bundleWallets} />
-                      </TabsContent>
-
-                      <TabsContent value="bump-wallets" className="mt-0">
-                        <BumpWalletsSection bumpWallets={selectedBot.bumpWallets} />
                       </TabsContent>
                     </Tabs>
                   </CardContent>
@@ -660,295 +492,5 @@ function StatCard({ title, value, prefix = "", suffix = "" }) {
         </div>
       </CardContent>
     </Card>
-  )
-}
-
-// Bundle Wallets Section Component
-function BundleWalletsSection({ bundleWallets }: { bundleWallets: any[] }) {
-  const [walletInputs, setWalletInputs] = useState<Record<string, { buyAmount: number; sellPercentage: number }>>({})
-
-  const updateWalletInput = (walletId: string, field: "buyAmount" | "sellPercentage", value: number) => {
-    setWalletInputs((prev) => ({
-      ...prev,
-      [walletId]: {
-        ...prev[walletId],
-        [field]: value,
-      },
-    }))
-  }
-
-  const handleBuy = (walletId: string, amount: number) => {
-    // Handle buy logic here
-    console.log(`Buy ${amount} SOL for wallet ${walletId}`)
-  }
-
-  const handleSell = (walletId: string, percentage: number) => {
-    // Handle sell logic here
-    console.log(`Sell ${percentage}% tokens for wallet ${walletId}`)
-  }
-
-  const handleSellAll = () => {
-    // Handle sell all logic here
-    console.log("Selling all tokens from all bundle wallets")
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard title="Total Bundle Wallets" value={bundleWallets.length} suffix="wallets" />
-        <StatCard
-          title="Active Wallets"
-          value={bundleWallets.filter((w) => w.status === "active").length}
-          suffix="active"
-        />
-        <StatCard
-          title="Total SOL Balance"
-          value={bundleWallets.reduce((sum, w) => sum + w.solBalance, 0).toFixed(3)}
-          suffix="SOL"
-        />
-      </div>
-
-      <Card className="border-gray-800 bg-gray-900/30">
-        <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-medium text-gray-400">Bundle Wallets Overview</CardTitle>
-          <Button
-            onClick={handleSellAll}
-            className="bg-red-600/20 text-red-400 border-red-600/30 hover:bg-red-600/30 hover:text-red-300"
-            size="sm"
-          >
-            Sell All Tokens
-          </Button>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {bundleWallets.map((wallet) => (
-              <div
-                key={wallet.id}
-                className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      wallet.status === "active"
-                        ? "bg-green-500"
-                        : wallet.status === "ready"
-                          ? "bg-blue-500"
-                          : "bg-gray-500"
-                    }`}
-                  />
-                  <div>
-                    <div className="text-xs font-mono text-gray-300 truncate w-32">{wallet.address}</div>
-                    <div className="text-xs text-gray-500">
-                      {wallet.status === "active" ? "Active" : wallet.status === "ready" ? "Ready" : "Empty"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-4">
-                  {/* SOL Balance and Buy Input */}
-                  <div className="text-right">
-                    <div className="text-xs text-gray-300">{wallet.solBalance.toFixed(4)} SOL</div>
-                    <div className="flex items-center space-x-1 mt-1">
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="0.001"
-                        placeholder="0.01"
-                        value={walletInputs[wallet.id]?.buyAmount || ""}
-                        onChange={(e) =>
-                          updateWalletInput(wallet.id, "buyAmount", Number.parseFloat(e.target.value) || 0)
-                        }
-                        className="bg-gray-800/50 border-gray-700 text-white h-6 w-16 text-xs"
-                      />
-                      <Button
-                        size="sm"
-                        className="bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/30 hover:text-green-300 h-6 px-2 text-xs"
-                        onClick={() => handleBuy(wallet.id, walletInputs[wallet.id]?.buyAmount || 0)}
-                      >
-                        Buy
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Token Balance and Sell Input */}
-                  <div className="text-right">
-                    <div className="text-xs text-gray-300">{wallet.tokenBalance.toFixed(0)} tokens</div>
-                    <div className="flex items-center space-x-1 mt-1">
-                      <Input
-                        type="number"
-                        min="1"
-                        max="100"
-                        step="1"
-                        placeholder="100"
-                        value={walletInputs[wallet.id]?.sellPercentage || ""}
-                        onChange={(e) =>
-                          updateWalletInput(wallet.id, "sellPercentage", Number.parseFloat(e.target.value) || 0)
-                        }
-                        className="bg-gray-800/50 border-gray-700 text-white h-6 w-12 text-xs"
-                      />
-                      <span className="text-xs text-gray-400">%</span>
-                      <Button
-                        size="sm"
-                        className="bg-red-600/20 text-red-400 border-red-600/30 hover:bg-red-600/30 hover:text-red-300 h-6 px-2 text-xs"
-                        onClick={() => handleSell(wallet.id, walletInputs[wallet.id]?.sellPercentage || 0)}
-                      >
-                        Sell
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-// Bump Wallets Section Component
-function BumpWalletsSection({ bumpWallets }: { bumpWallets: any[] }) {
-  const [walletInputs, setWalletInputs] = useState<Record<string, { buyAmount: number; sellPercentage: number }>>({})
-
-  const updateWalletInput = (walletId: string, field: "buyAmount" | "sellPercentage", value: number) => {
-    setWalletInputs((prev) => ({
-      ...prev,
-      [walletId]: {
-        ...prev[walletId],
-        [field]: value,
-      },
-    }))
-  }
-
-  const handleBuy = (walletId: string, amount: number) => {
-    // Handle buy logic here
-    console.log(`Buy ${amount} SOL for wallet ${walletId}`)
-  }
-
-  const handleSell = (walletId: string, percentage: number) => {
-    // Handle sell logic here
-    console.log(`Sell ${percentage}% tokens for wallet ${walletId}`)
-  }
-
-  const handleSellAll = () => {
-    // Handle sell all logic here
-    console.log("Selling all tokens from all bump wallets")
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard title="Total Bump Wallets" value={bumpWallets.length} suffix="wallets" />
-        <StatCard
-          title="Active Bumpers"
-          value={bumpWallets.filter((w) => w.status === "active").length}
-          suffix="active"
-        />
-        <StatCard title="Total Bumps" value={bumpWallets.reduce((sum, w) => sum + w.bumpCount, 0)} suffix="bumps" />
-      </div>
-
-      <Card className="border-gray-800 bg-gray-900/30">
-        <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-medium text-gray-400">Bump Wallets Overview</CardTitle>
-          <Button
-            onClick={handleSellAll}
-            className="bg-red-600/20 text-red-400 border-red-600/30 hover:bg-red-600/30 hover:text-red-300"
-            size="sm"
-          >
-            Sell All Tokens
-          </Button>
-        </CardHeader>
-        <CardContent className="p-4 pt-0">
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {bumpWallets.map((wallet) => (
-              <div
-                key={wallet.id}
-                className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800/70 transition-colors"
-              >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      wallet.status === "active"
-                        ? "bg-green-500"
-                        : wallet.status === "ready"
-                          ? "bg-blue-500"
-                          : "bg-gray-500"
-                    }`}
-                  />
-                  <div>
-                    <div className="text-xs font-mono text-gray-300 truncate w-32">{wallet.address}</div>
-                    <div className="text-xs text-gray-500">
-                      {wallet.status === "active" ? "Active" : wallet.status === "ready" ? "Ready" : "Empty"} •{" "}
-                      {wallet.bumpCount} bumps
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-4">
-                  {/* SOL Balance and Buy Input */}
-                  <div className="text-right">
-                    <div className="text-xs text-gray-300">{wallet.solBalance.toFixed(4)} SOL</div>
-                    <div className="flex items-center space-x-1 mt-1">
-                      <Input
-                        type="number"
-                        min="0.001"
-                        step="0.001"
-                        placeholder="0.01"
-                        value={walletInputs[wallet.id]?.buyAmount || ""}
-                        onChange={(e) =>
-                          updateWalletInput(wallet.id, "buyAmount", Number.parseFloat(e.target.value) || 0)
-                        }
-                        className="bg-gray-800/50 border-gray-700 text-white h-6 w-16 text-xs"
-                      />
-                      <Button
-                        size="sm"
-                        className="bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/30 hover:text-green-300 h-6 px-2 text-xs"
-                        onClick={() => handleBuy(wallet.id, walletInputs[wallet.id]?.buyAmount || 0)}
-                      >
-                        Buy
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Token Balance and Sell Input */}
-                  <div className="text-right">
-                    <div className="text-xs text-gray-300">{wallet.tokenBalance.toFixed(0)} tokens</div>
-                    <div className="flex items-center space-x-1 mt-1">
-                      <Input
-                        type="number"
-                        min="1"
-                        max="100"
-                        step="1"
-                        placeholder="100"
-                        value={walletInputs[wallet.id]?.sellPercentage || ""}
-                        onChange={(e) =>
-                          updateWalletInput(wallet.id, "sellPercentage", Number.parseFloat(e.target.value) || 0)
-                        }
-                        className="bg-gray-800/50 border-gray-700 text-white h-6 w-12 text-xs"
-                      />
-                      <span className="text-xs text-gray-400">%</span>
-                      <Button
-                        size="sm"
-                        className="bg-red-600/20 text-red-400 border-red-600/30 hover:bg-red-600/30 hover:text-red-300 h-6 px-2 text-xs"
-                        onClick={() => handleSell(wallet.id, walletInputs[wallet.id]?.sellPercentage || 0)}
-                      >
-                        Sell
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Last Bump Time */}
-                  <div className="text-right w-20">
-                    <div className="text-xs text-gray-500">
-                      {wallet.lastBump ? `${new Date(wallet.lastBump).toLocaleTimeString()}` : "Never"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
   )
 }
