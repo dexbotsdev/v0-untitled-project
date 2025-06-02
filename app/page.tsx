@@ -10,7 +10,7 @@ export default function HomePage() {
 
   useEffect(() => {
     // Redirect directly to volume-bot page
-    router.push("/volume-bot")
+    router.push("/new-vol-bot")
   }, [router])
 
   // Show loading state with FAB logo while redirecting

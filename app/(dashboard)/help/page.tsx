@@ -3,13 +3,26 @@
 import type React from "react"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { HelpCircle, Search, Mail, ExternalLink, BookOpen, MessageSquare, BarChart2 } from "lucide-react"
+import {
+  HelpCircle,
+  Search,
+  Mail,
+  ExternalLink,
+  BookOpen,
+  MessageSquare,
+  BarChart2,
+  Zap,
+  ArrowUpDown,
+  TrendingUp,
+  DollarSign,
+} from "lucide-react"
 
 export default function HelpPage() {
   const { toast } = useToast()
@@ -136,18 +149,18 @@ export default function HelpPage() {
                     <p className="mb-2">The Volume Booster Bot offers four unique trading strategies:</p>
                     <ul className="list-disc pl-5 space-y-2">
                       <li>
-                        <span className="font-medium text-amber-500">Bump</span> - Executes 1 buy and 1 sell transaction
+                        <span className="font-medium text-blue-500">Bump</span> - Executes buy and sell transactions
                         every cycle. This creates a natural trading pattern and is ideal for maintaining steady volume
                         without significantly affecting price.
                       </li>
                       <li>
-                        <span className="font-medium text-amber-500">Turbo</span> - High volume reverse trader that
-                        executes multiple trades in rapid succession, alternating between buys and sells. Best for
-                        creating significant volume spikes and attracting attention.
+                        <span className="font-medium text-purple-500">Turbo Boost</span> - High volume trader that
+                        executes multiple trades in rapid succession, moving large amounts of tokens. Best for creating
+                        significant volume spikes and attracting attention.
                       </li>
                       <li>
-                        <span className="font-medium text-amber-500">MicroBuys</span> - Executes many small buy
-                        transactions (as low as 0.0001 SOL each). This strategy creates a high number of transactions
+                        <span className="font-medium text-green-500">MicroBuys</span> - Executes many small buy
+                        transactions (as low as 0.00001 SOL each). This strategy creates a high number of transactions
                         with minimal market impact, giving the appearance of strong buying interest.
                       </li>
                       <li>
@@ -156,10 +169,13 @@ export default function HelpPage() {
                         natural-looking volume.
                       </li>
                     </ul>
-                    <p className="mt-2 text-gray-400">
-                      Each strategy has different trades per minute: Bump (2/min), Turbo (5/min), MicroBuys (8/min), and
-                      Pattern (3/min).
-                    </p>
+                    <p className="mt-4 text-gray-400">Want to learn more about each strategy in detail?</p>
+                    <Link href="/strategy-guide">
+                      <Button variant="outline" size="sm" className="mt-2">
+                        View Strategy Guide
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </Button>
+                    </Link>
                   </AccordionContent>
                 </AccordionItem>
 
@@ -218,17 +234,17 @@ export default function HelpPage() {
                     <p className="mb-2">The best strategy depends on your specific goals:</p>
                     <ul className="list-disc pl-5 space-y-2">
                       <li>
-                        <span className="font-medium text-amber-500">Bump</span> - Best for steady, natural-looking
+                        <span className="font-medium text-blue-500">Bump</span> - Best for steady, natural-looking
                         volume that won't significantly impact price. Good for established tokens wanting to maintain
                         trading activity.
                       </li>
                       <li>
-                        <span className="font-medium text-amber-500">Turbo</span> - Ideal for creating high volume
-                        spikes to attract attention. Good for promotional events or when trying to get noticed on
+                        <span className="font-medium text-purple-500">Turbo Boost</span> - Ideal for creating high
+                        volume spikes to attract attention. Good for promotional events or when trying to get noticed on
                         tracking sites and exchanges.
                       </li>
                       <li>
-                        <span className="font-medium text-amber-500">MicroBuys</span> - Perfect for creating a high
+                        <span className="font-medium text-green-500">MicroBuys</span> - Perfect for creating a high
                         transaction count with minimal price impact. Good for tokens looking to boost their ranking on
                         sites that track transaction counts rather than volume.
                       </li>
@@ -238,10 +254,13 @@ export default function HelpPage() {
                         positive price action.
                       </li>
                     </ul>
-                    <p className="mt-2 text-gray-400">
-                      For new tokens or promotional events, consider using Turbo for short bursts. For day-to-day
-                      operations, Bump or Pattern often provide the best balance of impact and sustainability.
-                    </p>
+                    <p className="mt-4 text-gray-400">For detailed explanations of each strategy with visual guides:</p>
+                    <Link href="/strategy-guide">
+                      <Button variant="outline" size="sm" className="mt-2">
+                        View Strategy Guide
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </Button>
+                    </Link>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
@@ -283,10 +302,12 @@ export default function HelpPage() {
                     <p className="text-sm text-gray-400 mb-3">
                       Learn how to optimize your volume strategy for maximum effectiveness and efficiency.
                     </p>
-                    <Button variant="outline" className="w-full" size="sm">
-                      Read Guide
-                      <ExternalLink className="ml-2 h-3 w-3" />
-                    </Button>
+                    <Link href="/strategy-guide">
+                      <Button variant="outline" className="w-full" size="sm">
+                        Read Guide
+                        <ExternalLink className="ml-2 h-3 w-3" />
+                      </Button>
+                    </Link>
                   </CardContent>
                 </Card>
 
@@ -328,12 +349,42 @@ export default function HelpPage() {
                 </h3>
                 <p className="mt-2 text-sm">
                   For a comprehensive breakdown of each volume strategy and optimal settings for different market
-                  conditions, download our strategy guide.
+                  conditions, check out our detailed strategy guide.
                 </p>
-                <Button className="mt-3" size="sm">
-                  Download Strategy Guide
-                  <ExternalLink className="ml-2 h-3 w-3" />
-                </Button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link href="/strategy-guide">
+                    <Button size="sm" className="bg-amber-600 hover:bg-amber-700">
+                      View Strategy Guide
+                      <ExternalLink className="ml-2 h-3 w-3" />
+                    </Button>
+                  </Link>
+                  <div className="flex gap-2">
+                    <Link href="/strategy-guide?tab=turbo">
+                      <Button size="sm" variant="outline" className="flex items-center gap-1 h-9">
+                        <Zap className="h-3 w-3 text-purple-400" />
+                        <span className="text-xs">Turbo</span>
+                      </Button>
+                    </Link>
+                    <Link href="/strategy-guide?tab=bump">
+                      <Button size="sm" variant="outline" className="flex items-center gap-1 h-9">
+                        <ArrowUpDown className="h-3 w-3 text-blue-400" />
+                        <span className="text-xs">Bump</span>
+                      </Button>
+                    </Link>
+                    <Link href="/strategy-guide?tab=pattern">
+                      <Button size="sm" variant="outline" className="flex items-center gap-1 h-9">
+                        <TrendingUp className="h-3 w-3 text-amber-400" />
+                        <span className="text-xs">Pattern</span>
+                      </Button>
+                    </Link>
+                    <Link href="/strategy-guide?tab=microbuy">
+                      <Button size="sm" variant="outline" className="flex items-center gap-1 h-9">
+                        <DollarSign className="h-3 w-3 text-green-400" />
+                        <span className="text-xs">MicroBuy</span>
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

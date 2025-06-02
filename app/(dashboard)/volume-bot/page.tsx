@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Header2 } from "@/components/header2"
 import { CreateBotDialog } from "@/components/volume-bot/create-bot-dialog"
 import { Button } from "@/components/ui/button"
@@ -16,7 +16,6 @@ import {
   Pause,
   StopCircle,
   Download,
-  Copy,
   Trash2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -24,6 +23,9 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { WalletStatusCard } from "@/components/volume-bot/wallet-status-card"
+import { useVolumeBotSDK } from "@/utils/volume-bot-sdk/use-volume-bot-sdk"
+import { ActivityLogger } from "@/components/turbo-boost/activity-logger"
+import { setWallets } from "@/utils/setWallets" // Declare the variable before using it
 
 // Add a new function to format dates in a readable way
 function formatDate(dateString) {
@@ -37,106 +39,46 @@ function formatDate(dateString) {
   }).format(date)
 }
 
-// Add a new function to generate activity logs
-function generateActivityLogs(token, count = 10) {
-  if (!token) return []
-
-  const actions = [
-    "Bot started",
-    "Bot paused",
-    "Trade executed",
-    "Wallet funded",
-    "Configuration updated",
-    "Priority fee adjusted",
-    "Slippage adjusted",
-    "Trade failed",
-    "Trade successful",
-    "Wallet created",
-  ]
-
-  const details = [
-    "Transaction successful",
-    "Waiting for confirmation",
-    "0.05 SOL traded",
-    "0.02 SOL traded",
-    "Added 0.1 SOL to wallet",
-    "Increased priority fee to 15000 LAMPs",
-    "Decreased slippage to 3%",
-    "Timeout error occurred",
-    "Transaction confirmed",
-    "New wallet initialized",
-  ]
-
-  return Array.from({ length: count }, (_, i) => {
-    const action = actions[Math.floor(Math.random() * actions.length)]
-    const detail = details[Math.floor(Math.random() * details.length)]
-    const timestamp = new Date(Date.now() - Math.floor(Math.random() * 86400000 * 3))
-
-    return {
-      id: `log-${token.id}-${i}`,
-      action,
-      detail,
-      timestamp,
-      tokenId: token.id,
-    }
-  }).sort((a, b) => b.timestamp - a.timestamp)
-}
-
 export default function VolumeBotPage() {
-  // Add a new state variable to track if any bot is running
-  const [tokens, setTokens] = useState<any[]>([])
-  const [selectedToken, setSelectedToken] = useState<any | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [wallets, setWallets] = useState<any[]>([])
-  const [isBotActive, setIsBotActive] = useState(false)
-  const [anyBotRunning, setAnyBotRunning] = useState(false)
-  const { toast } = useToast()
   const [selectAll, setSelectAll] = useState(false)
   const [fundAllAmount, setFundAllAmount] = useState("")
   const [isWsolMode, setIsWsolMode] = useState(false)
   const [isConverting, setIsConverting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const { toast } = useToast()
 
-  // Update the useEffect that loads mock data to check if any bot is active
+  // Use the Volume Bot SDK
+  const {
+    bots,
+    selectedBotId,
+    wallets,
+    logs,
+    isLoading,
+    createBot,
+    selectBot,
+    startBot,
+    pauseBot,
+    stopBot,
+    deleteBot,
+    generateWallets,
+    fundWallets,
+  } = useVolumeBotSDK({ debug: true })
 
-  // Load wallets when a token is selected
-  useEffect(() => {
-    if (selectedToken) {
-      loadWallets(selectedToken.id)
-    }
-  }, [selectedToken])
+  // Get the selected token
+  const selectedToken = selectedBotId ? bots.find((bot) => bot.id === selectedBotId) : null
+  const isBotActive = selectedToken?.status === "active"
+  const anyBotRunning = bots.some((bot) => bot.status === "active")
 
-  const loadWallets = async (tokenId: string) => {
-    setIsLoading(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    // Generate mock wallets - only for existing tokens, not for newly created ones
-    const existingToken = tokens.find((token) => token.id === tokenId)
-    setWallets([])
-
-    setIsBotActive(selectedToken.status === "active")
-    setIsLoading(false)
-    setSelectAll(false)
-  }
-
-  // Update the handleAddToken function to ensure new tokens are created in paused state
+  // Handle add token
   const handleAddToken = (newToken: any) => {
-    // Ensure the newToken has all required properties
-    const tokenWithDefaults = {
+    const botId = createBot({
       ...newToken,
-      id: Date.now().toString(),
       progress: 0,
-      status: "paused", // Always create in paused state
-    }
+      status: "paused",
+    })
 
-    setTokens((prev) => [...prev, tokenWithDefaults])
-    setSelectedToken(tokenWithDefaults)
-    setIsBotActive(false)
-
-    // Start with empty wallets for new tokens
-    setWallets([])
+    selectBot(botId)
 
     toast({
       title: "Volume Bot Created",
@@ -144,11 +86,12 @@ export default function VolumeBotPage() {
     })
   }
 
+  // Handle select token
   const handleSelectToken = (token: any) => {
-    setSelectedToken(token)
+    selectBot(token.id)
   }
 
-  // Update the handleStartBot function to check if any bot is already running
+  // Handle start bot
   const handleStartBot = () => {
     if (!selectedToken) return
 
@@ -163,7 +106,7 @@ export default function VolumeBotPage() {
     }
 
     // Check if any other bot is already running
-    if (anyBotRunning) {
+    if (anyBotRunning && selectedToken.status !== "active") {
       toast({
         title: "Cannot Start Bot",
         description: "Only one bot can run at a time. Please stop the currently running bot first.",
@@ -172,32 +115,45 @@ export default function VolumeBotPage() {
       return
     }
 
-    setIsBotActive(true)
-    setAnyBotRunning(true)
-    setTokens((prev) => prev.map((t) => (t.id === selectedToken.id ? { ...t, status: "active" } : t)))
-    setSelectedToken((prev) => (prev ? { ...prev, status: "active" } : null))
+    const success = startBot(selectedToken.id)
 
-    toast({
-      title: "Volume Bot Started",
-      description: `Volume bot for ${selectedToken.symbol} has been started.`,
-    })
+    if (success) {
+      toast({
+        title: "Volume Bot Started",
+        description: `Volume bot for ${selectedToken.symbol} has been started.`,
+      })
+    }
   }
 
-  // Update the handleStopBot function to update the anyBotRunning state
+  // Handle pause bot
+  const handlePauseBot = () => {
+    if (!selectedToken) return
+
+    const success = pauseBot(selectedToken.id)
+
+    if (success) {
+      toast({
+        title: "Volume Bot Paused",
+        description: `Volume bot for ${selectedToken.symbol} has been paused.`,
+      })
+    }
+  }
+
+  // Handle stop bot
   const handleStopBot = () => {
     if (!selectedToken) return
 
-    setIsBotActive(false)
-    setAnyBotRunning(false)
-    setTokens((prev) => prev.map((t) => (t.id === selectedToken.id ? { ...t, status: "stopped" } : t)))
-    setSelectedToken((prev) => (prev ? { ...prev, status: "stopped" } : null))
+    const success = stopBot(selectedToken.id)
 
-    toast({
-      title: "Volume Bot Stopped",
-      description: `Volume bot for ${selectedToken.symbol} has been stopped and cannot be restarted.`,
-    })
+    if (success) {
+      toast({
+        title: "Volume Bot Stopped",
+        description: `Volume bot for ${selectedToken.symbol} has been stopped and cannot be restarted.`,
+      })
+    }
   }
 
+  // Handle recover SOLs
   const handleRecoverSols = () => {
     if (!selectedToken) return
 
@@ -215,6 +171,7 @@ export default function VolumeBotPage() {
     }, 3000)
   }
 
+  // Handle export data
   const handleExportData = () => {
     toast({
       title: "Data Export",
@@ -222,18 +179,18 @@ export default function VolumeBotPage() {
     })
   }
 
+  // Handle duplicate token
   const handleDuplicateToken = (token: any) => {
     // Create a duplicate token with a new ID
     const duplicatedToken = {
       ...token,
-      id: Date.now().toString(),
       name: `${token.name} (Copy)`,
       symbol: `${token.symbol}-C`,
       progress: 0,
       status: "paused",
     }
 
-    setTokens((prev) => [...prev, duplicatedToken])
+    const botId = createBot(duplicatedToken)
 
     toast({
       title: "Token Duplicated",
@@ -241,19 +198,16 @@ export default function VolumeBotPage() {
     })
   }
 
+  // Handle delete token
   const handleDeleteToken = (token: any) => {
-    // Remove the token from the list
-    setTokens((prev) => prev.filter((t) => t.id !== token.id))
+    const success = deleteBot(token.id)
 
-    // If the deleted token was selected, clear the selection
-    if (selectedToken?.id === token.id) {
-      setSelectedToken(null)
+    if (success) {
+      toast({
+        title: "Token Deleted",
+        description: `${token.symbol} has been deleted.`,
+      })
     }
-
-    toast({
-      title: "Token Deleted",
-      description: `${token.symbol} has been deleted.`,
-    })
   }
 
   // Handle select all wallets
@@ -309,25 +263,21 @@ export default function VolumeBotPage() {
       return
     }
 
-    // Update the wallet balances
-    setWallets((wallets) =>
-      wallets.map((wallet) => {
-        if (walletsToFund.some((w) => w.id === wallet.id)) {
-          return {
-            ...wallet,
-            solBalance: wallet.solBalance + amount,
-          }
-        }
-        return wallet
-      }),
+    // Fund wallets using SDK
+    const success = fundWallets(
+      selectedToken.id,
+      walletsToFund.map((w) => w.id),
+      amount,
     )
 
-    setFundAllAmount("")
+    if (success) {
+      setFundAllAmount("")
 
-    toast({
-      title: "Wallets Funded",
-      description: `Successfully funded ${walletsToFund.length} wallets with ${amount} SOL each`,
-    })
+      toast({
+        title: "Wallets Funded",
+        description: `Successfully funded ${walletsToFund.length} wallets with ${amount} SOL each`,
+      })
+    }
   }
 
   // Handle generate wallets
@@ -358,31 +308,15 @@ export default function VolumeBotPage() {
       return
     }
 
-    // Simulate API call
-    setTimeout(() => {
-      // Generate the exact number of wallets needed to reach the configured count
-      const newWallets = Array.from({ length: walletsToGenerate }, (_, i) => {
-        const id = `wallet-${wallets.length + i}`
-        return {
-          id,
-          address: `${wallets.length + i}xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg${i}sU`.substring(0, 44),
-          tokenBalance: 0,
-          solBalance: 0.01,
-          tradesCount: 0,
-          lastTrade: new Date().toISOString(),
-          selected: false,
-        }
-      })
+    // Generate wallets using SDK
+    const newWallets = generateWallets(selectedToken.id, walletsToGenerate)
 
-      // Add new wallets to the list
-      setWallets((prev) => [...prev, ...newWallets])
-      setIsGenerating(false)
+    setIsGenerating(false)
 
-      toast({
-        title: "Wallets Generated",
-        description: `Successfully generated ${walletsToGenerate} wallets for ${selectedToken?.symbol}`,
-      })
-    }, 1500)
+    toast({
+      title: "Wallets Generated",
+      description: `Successfully generated ${walletsToGenerate} wallets for ${selectedToken?.symbol}`,
+    })
   }
 
   // Handle WSOL/SOL conversion
@@ -463,7 +397,7 @@ export default function VolumeBotPage() {
       {/* Main Content Area */}
       <div className="flex-1 overflow-auto p-4">
         {/* Empty State */}
-        {tokens.length === 0 && (
+        {bots.length === 0 && (
           <div className="flex flex-col items-center justify-center mt-12 p-8 bg-[#191929] rounded-lg border border-gray-800">
             <RefreshCw className="h-16 w-16 mb-4 opacity-20" />
             <h3 className="text-xl font-medium mb-2">No Volume Bots Created</h3>
@@ -527,18 +461,7 @@ export default function VolumeBotPage() {
                           variant="outline"
                           size="sm"
                           className="bg-amber-600/20 text-amber-400 border-amber-600/30 hover:bg-amber-600/30 hover:text-amber-300"
-                          onClick={() => {
-                            setIsBotActive(false)
-                            setAnyBotRunning(false)
-                            setTokens((prev) =>
-                              prev.map((t) => (t.id === selectedToken.id ? { ...t, status: "paused" } : t)),
-                            )
-                            setSelectedToken((prev) => (prev ? { ...prev, status: "paused" } : null))
-                            toast({
-                              title: "Volume Bot Paused",
-                              description: `Volume bot for ${selectedToken.symbol} has been paused.`,
-                            })
-                          }}
+                          onClick={handlePauseBot}
                         >
                           <Pause className="h-4 w-4 mr-1" />
                           Pause
@@ -553,7 +476,7 @@ export default function VolumeBotPage() {
                           Stop
                         </Button>
                       </>
-                    )} 
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -638,14 +561,13 @@ export default function VolumeBotPage() {
                         </CardContent>
                       </Card>
 
-<WalletStatusCard
-  totalWallets={selectedToken.numberOfWallets }
-  generatedWallets={wallets.length }
-  onGenerateWallets={handleGenerateWallets}
-  onImportWallets={()=>{}}
-  onTagWallets={()=>{}}
-/>
- 
+                      <WalletStatusCard
+                        totalWallets={selectedToken.numberOfWallets}
+                        generatedWallets={wallets.length}
+                        onGenerateWallets={handleGenerateWallets}
+                        onImportWallets={() => {}}
+                        onTagWallets={() => {}}
+                      />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -739,58 +661,74 @@ export default function VolumeBotPage() {
                   </TabsContent>
 
                   <TabsContent value="activity" className="mt-0">
-                    <Card className="bg-gray-800/30 border-gray-700">
-                      <CardHeader className="p-4 pb-2">
-                        <div className="flex justify-between items-center">
-                          <CardTitle className="text-sm font-medium text-gray-400">Activity Logs</CardTitle>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 bg-transparent border-gray-700 hover:bg-gray-700 text-xs"
-                            onClick={handleExportData}
-                          >
-                            <Download className="h-3.5 w-3.5 mr-1" />
-                            Export
-                          </Button>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="p-0">
-                        <div className="max-h-[400px] overflow-y-auto">
-                          <table className="w-full">
-                            <thead className="bg-gray-800/50 sticky top-0">
-                              <tr>
-                                <th className="text-left p-3 text-xs font-medium text-gray-400">Action</th>
-                                <th className="text-left p-3 text-xs font-medium text-gray-400">Details</th>
-                                <th className="text-right p-3 text-xs font-medium text-gray-400">Time</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800/50">
-                              {generateActivityLogs(selectedToken, 20).map((log) => (
-                                <tr key={log.id} className="hover:bg-gray-800/30">
-                                  <td className="p-3 text-xs">
-                                    <div
-                                      className={`font-medium ${
-                                        log.action.includes("started")
-                                          ? "text-green-400"
-                                          : log.action.includes("paused")
-                                            ? "text-amber-400"
-                                            : log.action.includes("failed")
-                                              ? "text-red-400"
-                                              : "text-gray-300"
-                                      }`}
-                                    >
-                                      {log.action}
-                                    </div>
-                                  </td>
-                                  <td className="p-3 text-xs text-gray-400">{log.detail}</td>
-                                  <td className="p-3 text-xs text-gray-500 text-right">{formatDate(log.timestamp)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="md:col-span-2">
+                        <Card className="bg-gray-800/30 border-gray-700">
+                          <CardHeader className="p-4 pb-2">
+                            <div className="flex justify-between items-center">
+                              <CardTitle className="text-sm font-medium text-gray-400">Activity Logs</CardTitle>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 bg-transparent border-gray-700 hover:bg-gray-700 text-xs"
+                                onClick={handleExportData}
+                              >
+                                <Download className="h-3.5 w-3.5 mr-1" />
+                                Export
+                              </Button>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-0">
+                            <div className="max-h-[400px] overflow-y-auto">
+                              <table className="w-full">
+                                <thead className="bg-gray-800/50 sticky top-0">
+                                  <tr>
+                                    <th className="text-left p-3 text-xs font-medium text-gray-400">Action</th>
+                                    <th className="text-left p-3 text-xs font-medium text-gray-400">Details</th>
+                                    <th className="text-right p-3 text-xs font-medium text-gray-400">Time</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-800/50">
+                                  {logs.map((log) => (
+                                    <tr key={log.id} className="hover:bg-gray-800/30">
+                                      <td className="p-3 text-xs">
+                                        <div
+                                          className={`font-medium ${
+                                            log.type === "success"
+                                              ? "text-green-400"
+                                              : log.type === "warning"
+                                                ? "text-amber-400"
+                                                : log.type === "error"
+                                                  ? "text-red-400"
+                                                  : "text-gray-300"
+                                          }`}
+                                        >
+                                          {log.message.split(":")[0]}
+                                        </div>
+                                      </td>
+                                      <td className="p-3 text-xs text-gray-400">
+                                        {log.message.includes(":") ? log.message.split(":")[1] : ""}
+                                      </td>
+                                      <td className="p-3 text-xs text-gray-500 text-right">
+                                        {formatDate(log.timestamp)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+
+                      <div className="md:col-span-1">
+                        <ActivityLogger
+                          botId={selectedToken.id}
+                          isActive={selectedToken.status === "active"}
+                          maxHeight="400px"
+                        />
+                      </div>
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="settings" className="mt-0">
@@ -846,13 +784,7 @@ export default function VolumeBotPage() {
                             <Button
                               variant="outline"
                               className="w-full justify-start bg-transparent border-gray-700 hover:bg-gray-700"
-                              onClick={() => {
-                                // This would open a dialog to edit bot settings
-                                toast({
-                                  title: "Delete Wallets",
-                                  description: "Bot settings editor would open here",
-                                })
-                              }}
+                              onClick={handleDeleteWallets}
                             >
                               <div className="flex items-center">
                                 <div className="bg-green-500/20 p-2 rounded-md mr-3">
@@ -860,7 +792,9 @@ export default function VolumeBotPage() {
                                 </div>
                                 <div className="text-left">
                                   <div className="font-medium">Delete Wallets</div>
-                                  <div className="text-xs text-gray-400">Modify bot configuration and Delete Wallets</div>
+                                  <div className="text-xs text-gray-400">
+                                    Modify bot configuration and Delete Wallets
+                                  </div>
                                 </div>
                               </div>
                             </Button>

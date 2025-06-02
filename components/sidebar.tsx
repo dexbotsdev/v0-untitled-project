@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
-import { Settings, HelpCircle, BarChart2, TrendingUp } from "lucide-react"
+import { Settings, HelpCircle, BarChart2, TrendingUp, Zap, Package } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -15,6 +15,16 @@ export function Sidebar() {
       name: "Volume Bot",
       href: "/volume-bot",
       icon: BarChart2,
+    },
+    {
+      name: "TurboBoost Bot",
+      href: "/turbo-boost-bot",
+      icon: Zap,
+    },
+    {
+      name: "Bundler Bot",
+      href: "/bundler",
+      icon: Package, // Add Package import from lucide-react
     },
     {
       name: "Volume Bot Strategy Guide",

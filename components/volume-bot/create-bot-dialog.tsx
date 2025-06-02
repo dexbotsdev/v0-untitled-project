@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast"
 import { Search, AlertCircle, CheckCircle2, Loader2, Coins, Wand2 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
+import axios from "axios"
 
 interface CreateBotDialogProps {
   open: boolean
@@ -20,6 +21,12 @@ interface CreateBotDialogProps {
 
 // SOL to USD conversion rate
 const SOL_USD_RATE = 145
+
+// Helius API endpoint
+const HELIUS_DEVNET_URL = "https://mainnet.helius-rpc.com/?api-key=916a30a1-c670-4f42-84a2-49117bb6f27f"
+
+// Maximum number of wallets
+const MAX_WALLETS = 4000
 
 export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDialogProps) {
   // Mode switch
@@ -39,12 +46,13 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
   // Bot configuration
   const [minTradeAmount, setMinTradeAmount] = useState("0.01")
   const [maxTradeAmount, setMaxTradeAmount] = useState("0.05")
-  const [duration, setDuration] = useState("24")
+  const [duration, setDuration] = useState("1440") // Default to 24 hours (1440 minutes)
   const [selectedStrategy, setSelectedStrategy] = useState<string>("bump")
   const [selectedPlatform, setSelectedPlatform] = useState<string>("raydium")
   const [tradesPerMinute, setTradesPerMinute] = useState("16")
   const [useAntiMev, setUseAntiMev] = useState(false)
   const [useFakeSigners, setUseFakeSigners] = useState(false)
+  const [useRepeatWallets, setUseRepeatWallets] = useState(false)
   const [tipAmount, setTipAmount] = useState("10000")
   const [priorityFees, setPriorityFees] = useState("10000")
   const [slippage, setSlippage] = useState("5")
@@ -60,14 +68,28 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
   const { toast } = useToast()
 
   // Calculate number of wallets based on trades per minute * duration in minutes
+  // with a maximum limit of MAX_WALLETS
   const calculatedWallets = useMemo(() => {
     const tpm = Number.parseInt(tradesPerMinute || "16")
-    const durationHours = Number.parseInt(duration || "24")
-    const durationMinutes = durationHours * 60
+    const durationMinutes = Number.parseInt(duration || "1440")
 
-    // Number of wallets equals total number of trades (trades per minute * duration in minutes)
+    // If repeat wallets is enabled, we need fewer wallets
+    if (useRepeatWallets) {
+      // Use 10% of the total trades as the number of wallets, with a minimum of 100
+      const repeatWalletCount = Math.max(Math.ceil(tpm * durationMinutes * 0.1), 100)
+      return Math.min(repeatWalletCount, MAX_WALLETS)
+    }
+
+    // Otherwise, calculate normally but cap at MAX_WALLETS
+    return Math.min(tpm * durationMinutes, MAX_WALLETS)
+  }, [tradesPerMinute, duration, useRepeatWallets])
+
+  // Calculate total trades (not limited by wallet count when repeat wallets is enabled)
+  const calculateTotalTrades = () => {
+    const tpm = Number.parseInt(tradesPerMinute || "16")
+    const durationMinutes = Number.parseInt(duration || "1440")
     return tpm * durationMinutes
-  }, [tradesPerMinute, duration])
+  }
 
   // Update trades per minute based on selected strategy only if not manually set
   useEffect(() => {
@@ -102,7 +124,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
   // Calculate estimated volume based on inputs
   const calculateEstimatedVolume = () => {
     // Total Volume = Duration in Minutes * Trades Per Minute * Max Trade * 2 in USD
-    const durationMinutes = Number.parseInt(duration) * 60
+    const durationMinutes = Number.parseInt(duration)
     const tradesPerMin = Number.parseInt(tradesPerMinute)
     const maxTrade = Number.parseFloat(maxTradeAmount)
 
@@ -115,6 +137,42 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
     return num.toLocaleString(undefined, {
       maximumFractionDigits: num > 1000000 ? 0 : 2,
     })
+  }
+
+  // Format large numbers with abbreviations
+  const formatLargeNumber = (num) => {
+    if (num >= 1000000) {
+      return `${(num / 1000000).toFixed(1)}M`
+    } else if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K`
+    }
+    return num.toString()
+  }
+
+  // Add this helper function to format duration in a user-friendly way
+  // Add this function near the other helper functions like formatLargeNumber
+  const formatDuration = (minutes: number): string => {
+    if (minutes < 60) {
+      return `${minutes}m`
+    }
+    const hours = Math.floor(minutes / 60)
+    const remainingMinutes = minutes % 60
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`
+  }
+
+  // Calculate the wallet efficiency percentage
+  const calculateWalletEfficiency = () => {
+    const totalTrades = Number.parseInt(tradesPerMinute) * Number.parseInt(duration)
+    if (totalTrades === 0) return 100
+
+    return Math.min(Math.round((calculatedWallets / totalTrades) * 100), 100)
+  }
+
+  // Get wallet efficiency color
+  const getWalletEfficiencyColor = (efficiency) => {
+    if (efficiency < 25) return "text-red-400"
+    if (efficiency < 50) return "text-amber-400"
+    return "text-green-400"
   }
 
   const calculateStrategy = () => {
@@ -166,41 +224,42 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
       let suggestedMaxTradeAmount
       let suggestedAntiMev = false
       const suggestedFakeSigners = true
+      const suggestedRepeatWallets = true // Enable repeat wallets by default in auto mode
 
       // Strategy selection logic
       if (volumeToBudgetRatio > 100) {
         // High volume with limited budget - use microbuys
         suggestedStrategy = "microbuys"
         suggestedTradesPerMinute = "30"
-        suggestedDuration = Math.min(Math.ceil(volumeUSD / (30 * 60 * 0.001 * SOL_USD_RATE * 2)), 168).toString()
+        suggestedDuration = Math.min(Math.ceil(volumeUSD / (30 * 0.001 * SOL_USD_RATE * 2)), 10080).toString() // Max 7 days (10080 minutes)
         suggestedMinTradeAmount = "0.001"
         suggestedMaxTradeAmount = "0.005"
       } else if (volumeToBudgetRatio > 50) {
         // Medium-high volume - use bump strategy
         suggestedStrategy = "bump"
         suggestedTradesPerMinute = "16"
-        suggestedDuration = Math.min(Math.ceil(volumeUSD / (16 * 60 * 0.01 * SOL_USD_RATE * 2)), 168).toString()
+        suggestedDuration = Math.min(Math.ceil(volumeUSD / (16 * 0.01 * SOL_USD_RATE * 2)), 10080).toString() // Max 7 days (10080 minutes)
         suggestedMinTradeAmount = "0.01"
         suggestedMaxTradeAmount = "0.05"
       } else if (volumeToBudgetRatio > 20) {
         // Medium volume - use turbo strategy
         suggestedStrategy = "turbo"
         suggestedTradesPerMinute = "4"
-        suggestedDuration = Math.min(Math.ceil(volumeUSD / (4 * 60 * 0.05 * SOL_USD_RATE * 2)), 168).toString()
+        suggestedDuration = Math.min(Math.ceil(volumeUSD / (4 * 0.05 * SOL_USD_RATE * 2)), 10080).toString() // Max 7 days (10080 minutes)
         suggestedMinTradeAmount = "0.05"
         suggestedMaxTradeAmount = "0.1"
       } else {
         // Low volume or high budget - use pattern strategy
         suggestedStrategy = "pattern"
         suggestedTradesPerMinute = "4"
-        suggestedDuration = Math.min(Math.ceil(volumeUSD / (4 * 60 * 0.1 * SOL_USD_RATE * 2)), 168).toString()
+        suggestedDuration = Math.min(Math.ceil(volumeUSD / (4 * 0.1 * SOL_USD_RATE * 2)), 10080).toString() // Max 7 days (10080 minutes)
         suggestedMinTradeAmount = "0.1"
         suggestedMaxTradeAmount = "0.2"
         suggestedAntiMev = true
       }
 
       // Ensure duration is at least 1 hour
-      if (Number.parseInt(suggestedDuration) < 1) suggestedDuration = "1"
+      if (Number.parseInt(suggestedDuration) < 60) suggestedDuration = "60"
 
       // Update state with suggested values
       setSelectedStrategy(suggestedStrategy)
@@ -210,11 +269,11 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
       setMaxTradeAmount(suggestedMaxTradeAmount)
       setUseAntiMev(suggestedAntiMev)
       setUseFakeSigners(suggestedFakeSigners)
+      setUseRepeatWallets(suggestedRepeatWallets)
 
       // Calculate estimated volume based on suggested settings
       const estimatedVolume =
         Number.parseInt(suggestedDuration) *
-        60 *
         Number.parseInt(suggestedTradesPerMinute) *
         Number.parseFloat(suggestedMaxTradeAmount) *
         2 *
@@ -250,59 +309,40 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
     setSearchError(null)
 
     try {
-      // Call DexScreener API
-      const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`)
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`)
+      // Call Helius API to get token details
+      const body = {
+        jsonrpc: "2.0",
+        id: "get-metadata",
+        method: "getAsset",
+        params: {
+          id: tokenAddress,
+        },
       }
 
-      const data = await response.json()
+      const response = await axios.post(HELIUS_DEVNET_URL, body)
 
-      if (!data.pairs || data.pairs.length === 0) {
-        toast({
-          title: "Token Not Found",
-          description: "No trading pairs found for this token address",
-          variant: "destructive",
-        })
-        setIsSearching(false)
-        return
+      // Check if response has the expected data
+      if (!response.data || !response.data.result) {
+        throw new Error("Invalid response from Helius API")
       }
 
-      // Find the Solana pair with the highest liquidity
-      const solanaPairs = data.pairs.filter((pair) => pair.chainId === "solana")
-      if (solanaPairs.length === 0) {
-        toast({
-          title: "Token Not Found on Solana",
-          description: "This token doesn't have any Solana trading pairs",
-          variant: "destructive",
-        })
-        setIsSearching(false)
-        return
-      }
+      const tokenData = response.data.result
 
-      // Sort by liquidity (USD) and get the highest
-      const bestPair = solanaPairs.sort(
-        (a, b) => Number.parseFloat(b.liquidity?.usd || "0") - Number.parseFloat(a.liquidity?.usd || "0"),
-      )[0]
-
-      // Format token details from the API response
+      // Extract the required fields
       const formattedToken = {
-        symbol: bestPair.baseToken.symbol,
-        name: bestPair.baseToken.name,
+        symbol: tokenData.content?.metadata?.symbol || "UNKNOWN",
+        name: tokenData.content?.metadata?.name || "Unknown Token",
         address: tokenAddress,
-        marketCap: bestPair.fdv ? `$${formatNumber(bestPair.fdv)}` : "Unknown",
-        holders: "N/A", // DexScreener doesn't provide holder count
-        liquidity: bestPair.liquidity?.usd ? `$${formatNumber(bestPair.liquidity.usd)}` : "Unknown",
-        price: bestPair.priceUsd ? `$${Number.parseFloat(bestPair.priceUsd).toFixed(6)}` : "Unknown",
-        priceChange: bestPair.priceChange?.h24 ? `${bestPair.priceChange.h24}%` : "N/A",
-        volume24h: bestPair.volume?.h24 ? `$${formatNumber(bestPair.volume.h24)}` : "N/A",
-        pairAddress: bestPair.pairAddress,
-        dexId: bestPair.dexId,
-        isPriceUp: bestPair.priceChange?.h24 ? Number.parseFloat(bestPair.priceChange.h24) >= 0 : null,
+        image: tokenData.content?.links?.image || "/digital-token.png",
       }
 
       setTokenDetails(formattedToken)
+
+      toast({
+        title: "Token Found",
+        description: `Found ${formattedToken.name} (${formattedToken.symbol})`,
+        variant: "default",
+      })
     } catch (error) {
       console.error("Error fetching token details:", error)
       toast({
@@ -327,7 +367,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
     const estimatedVolume = calculateEstimatedVolume()
 
     // Calculate estimated trades
-    const totalMinutes = Number.parseInt(duration) * 60
+    const totalMinutes = Number.parseInt(duration)
     const tradesPerMin = Number.parseInt(tradesPerMinute)
     const estimatedTrades = totalMinutes * tradesPerMin
 
@@ -359,7 +399,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
       jitoBundleTips: useAntiMev ? `${jitoBundleTips.toFixed(4)} SOL` : "0 SOL",
       tokenAccountCreationFees: `${tokenAccountCreationFees.toFixed(7)} SOL`,
       priorityFees: `${priorityFeeTotal.toFixed(4)} SOL (Auto)`,
-      estimatedDuration: `${duration} hours`,
+      estimatedDuration: formatDuration(Number.parseInt(duration)),
       estimatedTrades: estimatedTrades,
       estimatedVolume: `$${estimatedVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
       estimatedImpact: estimatedVolume > 50000 ? "High" : estimatedVolume > 20000 ? "Medium" : "Low",
@@ -367,6 +407,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
       devWalletRequired: `${devWalletRequired.toFixed(4)} SOL`,
       fakeSignersEnabled: useFakeSigners,
       antiMevEnabled: useAntiMev,
+      repeatWalletsEnabled: useRepeatWallets,
       priorityFeesAutomatic: true,
     }
 
@@ -404,8 +445,8 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
       symbol: tokenDetails.symbol,
       name: tokenDetails.name,
       address: tokenDetails.address,
-      // Use a simple icon instead of trying to load an external image
-      logo: "/moon.png", // Use a local image that we know exists
+      // Use the image from token details or a fallback
+      logo: tokenDetails.image || "/moon.png",
       progress: 0,
       status: "paused",
       // Bot settings directly in token
@@ -418,6 +459,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
       numberOfWallets: calculatedWallets,
       useAntiMev: useAntiMev,
       useFakeSigners: useFakeSigners,
+      useRepeatWallets: useRepeatWallets,
       tipAmount: Number.parseInt(tipAmount),
       priorityFees: Number.parseInt(priorityFees),
       slippage: Number.parseFloat(slippage),
@@ -433,7 +475,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
     setTokenAddress("")
     setMinTradeAmount("0.01")
     setMaxTradeAmount("0.05")
-    setDuration("24")
+    setDuration("1440") // Reset to 24 hours (1440 minutes)
     setTokenDetails(null)
     setEstimateDetails(null)
     setSelectedStrategy("bump")
@@ -442,6 +484,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
     tradesPerMinuteManuallySet.current = false // Reset manual flag
     setUseAntiMev(false)
     setUseFakeSigners(false)
+    setUseRepeatWallets(false)
     setTipAmount("10000")
     setPriorityFees("10000")
     setSlippage("5")
@@ -455,16 +498,6 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
   const handleTradesPerMinuteChange = (e) => {
     setTradesPerMinute(e.target.value)
     tradesPerMinuteManuallySet.current = true
-  }
-
-  // Format large numbers with abbreviations
-  const formatLargeNumber = (num) => {
-    if (num >= 1000000) {
-      return `${(num / 1000000).toFixed(1)}M`
-    } else if (num >= 1000) {
-      return `${(num / 1000).toFixed(1)}K`
-    }
-    return num.toString()
   }
 
   return (
@@ -588,7 +621,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                       </div>
                       <div>
                         <span className="text-gray-400">Duration: </span>
-                        <span>{duration} hours</span>
+                        <span>{formatDuration(Number.parseInt(duration))}</span>
                       </div>
                       <div>
                         <span className="text-gray-400">Trades/min: </span>
@@ -608,8 +641,9 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                         <span className="text-gray-400">Features: </span>
                         <span>
                           {useAntiMev ? "AntiMEV, " : ""}
-                          {useFakeSigners ? "Fake Signers" : ""}
-                          {!useAntiMev && !useFakeSigners ? "None" : ""}
+                          {useFakeSigners ? "Fake Signers, " : ""}
+                          {useRepeatWallets ? "Repeat Wallets" : ""}
+                          {!useAntiMev && !useFakeSigners && !useRepeatWallets ? "None" : ""}
                         </span>
                       </div>
                     </div>
@@ -709,18 +743,45 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label htmlFor="duration" className="text-xs">
-                      Duration (hours)
+                      Duration
                     </Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      min="1"
-                      max="168"
-                      value={duration}
-                      onChange={(e) => setDuration(e.target.value)}
-                      className="bg-gray-900/50 border-gray-800 h-8 text-sm"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">{Number.parseInt(duration || "0") * 60} minutes total</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Input
+                          id="durationHours"
+                          type="number"
+                          min="0"
+                          max="168"
+                          value={Math.floor(Number.parseInt(duration) / 60).toString()}
+                          onChange={(e) => {
+                            const hours = Number.parseInt(e.target.value) || 0
+                            const minutes = Number.parseInt(duration) % 60
+                            setDuration((hours * 60 + minutes).toString())
+                          }}
+                          className="bg-gray-900/50 border-gray-800 h-8 text-sm"
+                          placeholder="Hours"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Hours</p>
+                      </div>
+                      <div>
+                        <Input
+                          id="durationMinutes"
+                          type="number"
+                          min="0"
+                          max="59"
+                          value={(Number.parseInt(duration) % 60).toString()}
+                          onChange={(e) => {
+                            const hours = Math.floor(Number.parseInt(duration) / 60)
+                            const minutes = Number.parseInt(e.target.value) || 0
+                            setDuration((hours * 60 + minutes).toString())
+                          }}
+                          className="bg-gray-900/50 border-gray-800 h-8 text-sm"
+                          placeholder="Minutes"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">Minutes</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{formatDuration(Number.parseInt(duration))} total</p>
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="tradesPerMinute" className="text-xs">
@@ -736,7 +797,7 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                       className="bg-gray-900/50 border-gray-800 h-8 text-sm"
                     />
                     <p className="text-xs text-gray-400 mt-1">
-                      {Number.parseInt(tradesPerMinute || "0") * Number.parseInt(duration || "0") * 60} total trades
+                      {Number.parseInt(tradesPerMinute || "0") * Number.parseInt(duration || "0")} total trades
                     </p>
                   </div>
                 </div>
@@ -747,13 +808,20 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                     <span className="text-gray-300">Number of Wallets:</span>
                     <span className="font-medium text-amber-400">{formatLargeNumber(calculatedWallets)}</span>
                   </div>
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-gray-300">Wallet Efficiency:</span>
+                    <span className={`font-medium ${getWalletEfficiencyColor(calculateWalletEfficiency())}`}>
+                      {calculateWalletEfficiency()}%
+                    </span>
+                  </div>
                   <p className="text-gray-400 mt-1">
-                    Calculated as: Trades Per Minute ({tradesPerMinute}) × Total Minutes (
-                    {Number.parseInt(duration) * 60})
+                    {useRepeatWallets
+                      ? `Using ${calculatedWallets} wallets for ${Number.parseInt(tradesPerMinute) * Number.parseInt(duration) * 60} trades (wallets will be reused)`
+                      : `Limited to ${MAX_WALLETS} wallets maximum`}
                   </p>
                 </div>
 
-                {/* Checkboxes for AntiMev and Fake Signers */}
+                {/* Checkboxes for AntiMev, Fake Signers, and Repeat Wallets */}
                 <div className="flex flex-col space-y-2">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -776,6 +844,18 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                     />
                     <Label htmlFor="fakeSigners" className="text-xs cursor-pointer">
                       Use Fake Signers (Save on Fees)
+                    </Label>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="repeatWallets"
+                      checked={useRepeatWallets}
+                      onCheckedChange={(checked) => setUseRepeatWallets(checked === true)}
+                      className="data-[state=checked]:bg-amber-600"
+                    />
+                    <Label htmlFor="repeatWallets" className="text-xs cursor-pointer">
+                      Repeat Wallets (Reuse wallets for multiple trades)
                     </Label>
                   </div>
                 </div>
@@ -827,13 +907,15 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                 </div>
 
                 {/* Warning for large wallet counts */}
-                {calculatedWallets > 10000 && (
+                {!useRepeatWallets && Number.parseInt(tradesPerMinute) * Number.parseInt(duration) > MAX_WALLETS && (
                   <div className="bg-amber-500/10 rounded-md p-2 text-xs border border-amber-500/30">
                     <div className="flex items-start space-x-2">
                       <AlertCircle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
                       <p className="text-amber-400">
-                        Warning: You are creating a very large number of wallets ({formatLargeNumber(calculatedWallets)}
-                        ). This may require significant resources and time to set up.
+                        Warning: Your configuration requires{" "}
+                        {formatLargeNumber(Number.parseInt(tradesPerMinute) * Number.parseInt(duration))} wallets, but
+                        is limited to {formatLargeNumber(MAX_WALLETS)}. Consider enabling "Repeat Wallets" or reducing
+                        trades.
                       </p>
                     </div>
                   </div>
@@ -885,6 +967,9 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
                   <div className="text-xs col-span-2">
                     <span className="text-gray-400">Number of Wallets: </span>
                     <span>{formatLargeNumber(estimateDetails.walletCount)}</span>
+                    {estimateDetails.repeatWalletsEnabled && (
+                      <span className="text-xs text-green-400 ml-1">(Repeat wallets enabled)</span>
+                    )}
                   </div>
                   <div className="text-xs col-span-2">
                     <span className="text-gray-400">Dev Wallet Required: </span>
@@ -981,50 +1066,31 @@ export function CreateBotDialog({ open, onOpenChange, onCreateBot }: CreateBotDi
             {tokenDetails && (
               <div className="p-3 bg-gray-900/30 rounded-md border border-gray-800">
                 <div className="flex items-center space-x-3">
-                  {/* Replace dynamic image with icon */}
-                  <div className="h-12 w-12 rounded-full bg-amber-500/20 flex items-center justify-center">
-                    <Coins className="h-6 w-6 text-amber-500" />
+                  {/* Token image */}
+                  <div className="h-12 w-12 rounded-full bg-amber-500/20 flex items-center justify-center overflow-hidden">
+                    {tokenDetails.image ? (
+                      <img
+                        src={tokenDetails.image || "/placeholder.svg"}
+                        alt={tokenDetails.symbol}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.src = "/digital-token.png"
+                        }}
+                      />
+                    ) : (
+                      <Coins className="h-6 w-6 text-amber-500" />
+                    )}
                   </div>
                   <div className="flex-1">
                     <h3 className="text-sm font-medium">
                       {tokenDetails.name} ({tokenDetails.symbol})
                     </h3>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
-                      <div className="text-xs">
-                        <span className="text-gray-400">Price: </span>
-                        <span
-                          className={
-                            tokenDetails.isPriceUp !== null
-                              ? tokenDetails.isPriceUp
-                                ? "text-green-400"
-                                : "text-red-400"
-                              : ""
-                          }
-                        >
-                          {tokenDetails.price}
-                        </span>
-                        {tokenDetails.isPriceUp !== null && (
-                          <span className={`ml-1 ${tokenDetails.isPriceUp ? "text-green-400" : "text-red-400"}`}>
-                            ({tokenDetails.priceChange})
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-gray-400">24h Volume: </span>
-                        <span>{tokenDetails.volume24h}</span>
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-gray-400">Market Cap: </span>
-                        <span>{tokenDetails.marketCap}</span>
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-gray-400">Liquidity: </span>
-                        <span>{tokenDetails.liquidity}</span>
-                      </div>
-                      <div className="text-xs col-span-2 mt-1">
-                        <span className="text-gray-400">DEX: </span>
-                        <span className="capitalize">{tokenDetails.dexId || "Unknown"}</span>
-                      </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      <span>Token Address: </span>
+                      <span className="text-gray-300 font-mono">
+                        {tokenDetails.address.substring(0, 8)}...
+                        {tokenDetails.address.substring(tokenDetails.address.length - 8)}
+                      </span>
                     </div>
                   </div>
                 </div>
