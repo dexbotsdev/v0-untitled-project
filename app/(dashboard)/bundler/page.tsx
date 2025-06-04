@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { PathBreadcrumb } from "@/components/path-breadcrumb"
 import { Button } from "@/components/ui/button"
-import { Plus, RefreshCw, Package, Trash2, AlertCircle } from "lucide-react"
+import { Plus, RefreshCw, Package, Trash2, AlertCircle, DollarSign, ToggleLeft, ToggleRight } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { CreateBundlerDialog } from "@/components/bundler/create-bundler-dialog"
@@ -26,8 +26,10 @@ import { WalletsTable } from "@/components/bundler/wallets-table"
 export default function BundlerPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isRugpullDialogOpen, setIsRugpullDialogOpen] = useState(false)
   const [activeBots, setActiveBots] = useState<any[]>([])
   const [selectedBot, setSelectedBot] = useState<any | null>(null)
+  const [showUSD, setShowUSD] = useState(false) // Toggle between SOL and USD
 
   const { toast } = useToast()
 
@@ -99,6 +101,14 @@ export default function BundlerPage() {
         selectedGroup: "group-1",
         customWallets: [],
       },
+      // Market data for the token
+      marketData: {
+        totalBuys: Math.floor(Math.random() * 500) + 50,
+        currentMcap: Math.floor(Math.random() * 1000000) + 100000,
+        currentValueSOL: Math.random() * 10 + 1,
+        currentValueUSD: (Math.random() * 10 + 1) * 180, // Assuming 1 SOL = ~$180
+        solToUsdRate: 180,
+      },
     }
 
     setActiveBots((prev) => [...prev, newBot])
@@ -154,6 +164,24 @@ export default function BundlerPage() {
     })
   }
 
+  const handleRugpull = () => {
+    if (!selectedBot) return
+
+    setIsRugpullDialogOpen(false)
+
+    // Simulate rugpull action
+    toast({
+      title: "Book Profits Executed",
+      description: `Successfully executed rugpull for ${selectedBot.tokenSymbol}. All profits have been booked.`,
+      variant: "destructive",
+    })
+
+    // Update bot status to completed
+    const updatedBot = { ...selectedBot, status: "completed" }
+    setActiveBots((prev) => prev.map((bot) => (bot.id === selectedBot.id ? updatedBot : bot)))
+    setSelectedBot(updatedBot)
+  }
+
   const updateWalletBalances = (walletId: string, updates: { solBalance?: number; tokenBalance?: number }) => {
     if (!selectedBot) return
 
@@ -165,6 +193,19 @@ export default function BundlerPage() {
 
     setActiveBots((prev) => prev.map((bot) => (bot.id === selectedBot.id ? updatedBot : bot)))
     setSelectedBot(updatedBot)
+  }
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: 2,
+    }).format(num)
+  }
+
+  const formatCurrency = (value: number, isUSD = false) => {
+    if (isUSD) {
+      return `$${formatNumber(value)}`
+    }
+    return `${formatNumber(value)} SOL`
   }
 
   // Check if any bot is created
@@ -179,14 +220,26 @@ export default function BundlerPage() {
             { label: "Bundler Bot", href: "/bundler" },
           ]}
         />
-        <Button
-          onClick={() => setIsDialogOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-          disabled={isBotCreated} // Disable if a bot is already created
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Create Bot
-        </Button>
+        <div className="flex space-x-2">
+          {selectedBot && selectedBot.status !== "completed" && (
+            <Button
+              onClick={() => setIsRugpullDialogOpen(true)}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              size="sm"
+            >
+              <DollarSign className="mr-2 h-4 w-4" />
+              Book Profits (Rugpull)
+            </Button>
+          )}
+          <Button
+            onClick={() => setIsDialogOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={isBotCreated} // Disable if a bot is already created
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Create Bot
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 p-6 overflow-auto">
@@ -383,8 +436,26 @@ export default function BundlerPage() {
                         <div className="space-y-4">
                           {/* Token Metadata Card */}
                           <Card className="border-gray-800 bg-gray-900/30">
-                            <CardHeader className="p-4 pb-2">
+                            <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
                               <CardTitle className="text-sm font-medium text-gray-400">Token Metadata</CardTitle>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setShowUSD(!showUSD)}
+                                className="text-gray-400 hover:text-gray-300"
+                              >
+                                {showUSD ? (
+                                  <>
+                                    <ToggleRight className="h-4 w-4 mr-1" />
+                                    USD
+                                  </>
+                                ) : (
+                                  <>
+                                    <ToggleLeft className="h-4 w-4 mr-1" />
+                                    SOL
+                                  </>
+                                )}
+                              </Button>
                             </CardHeader>
                             <CardContent className="p-4 pt-0">
                               <div className="grid grid-cols-2 gap-4">
@@ -400,22 +471,24 @@ export default function BundlerPage() {
                                     {selectedBot.tokenMetadata?.symbol || "N/A"}
                                   </div>
                                 </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Total Buys</div>
+                                  <div className="text-sm text-gray-300 font-semibold">
+                                    {formatNumber(selectedBot.marketData?.totalBuys || 0)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Current Mcap</div>
+                                  <div className="text-sm text-gray-300 font-semibold">
+                                    ${formatNumber(selectedBot.marketData?.currentMcap || 0)}
+                                  </div>
+                                </div>
                                 <div className="col-span-2">
-                                  <div className="text-xs text-gray-500 mb-1">Description</div>
-                                  <div className="text-sm text-gray-300">
-                                    {selectedBot.tokenMetadata?.description || "N/A"}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-gray-500 mb-1">Website</div>
-                                  <div className="text-sm text-gray-300">
-                                    {selectedBot.tokenMetadata?.website || "N/A"}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-gray-500 mb-1">Twitter</div>
-                                  <div className="text-sm text-gray-300">
-                                    {selectedBot.tokenMetadata?.twitter || "N/A"}
+                                  <div className="text-xs text-gray-500 mb-1">Current Value</div>
+                                  <div className="text-lg text-green-400 font-bold">
+                                    {showUSD
+                                      ? formatCurrency(selectedBot.marketData?.currentValueUSD || 0, true)
+                                      : formatCurrency(selectedBot.marketData?.currentValueSOL || 0, false)}
                                   </div>
                                 </div>
                               </div>
@@ -481,6 +554,30 @@ export default function BundlerPage() {
 
       {/* Create Bot Dialog */}
       <CreateBundlerDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} onCreateBot={handleCreateBot} />
+
+      {/* Rugpull Confirmation Dialog */}
+      <AlertDialog open={isRugpullDialogOpen} onOpenChange={setIsRugpullDialogOpen}>
+        <AlertDialogContent className="bg-[#1e2133] border-gray-800 text-stone-200">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center">
+              <DollarSign className="h-5 w-5 mr-2 text-red-400" />
+              Book Profits (Rugpull)
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              Are you sure you want to execute a rugpull for {selectedBot?.tokenSymbol}? This will sell all tokens and
+              book profits. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-gray-700 bg-gray-800/50 hover:bg-gray-700/50 text-gray-300">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={handleRugpull}>
+              Execute Rugpull
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Bot Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
