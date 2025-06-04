@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { DevTradingSettingsSection } from "@/components/bundler/dev-trading-settings-section"
+import { WalletsTable } from "@/components/bundler/wallets-table"
 
 export default function BundlerPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -30,16 +31,49 @@ export default function BundlerPage() {
 
   const { toast } = useToast()
 
+  const generateWalletsFromGroup = (selectedGroup: string, customWallets: any[] = []) => {
+    if (selectedGroup === "custom") {
+      return customWallets.map((wallet, index) => ({
+        id: `custom-wallet-${index}`,
+        address: wallet.address,
+        solBalance: Math.random() * 0.1 + 0.001, // Random SOL balance
+        tokenBalance: Math.random() * 1000, // Random token balance
+        status: Math.random() > 0.7 ? "active" : Math.random() > 0.4 ? "ready" : "empty",
+        lastUsed: Math.random() > 0.5 ? new Date().toISOString() : null,
+      }))
+    }
+
+    const walletCount =
+      selectedGroup === "group-1" ? 10 : selectedGroup === "group-2" ? 25 : selectedGroup === "group-3" ? 50 : 10
+
+    return Array(walletCount)
+      .fill(0)
+      .map((_, i) => ({
+        id: `wallet-${selectedGroup}-${i}`,
+        address: `${selectedGroup.toUpperCase()}${i}xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg`,
+        solBalance: Math.random() * 0.1 + 0.001,
+        tokenBalance: Math.random() * 1000,
+        status: Math.random() > 0.7 ? "active" : Math.random() > 0.4 ? "ready" : "empty",
+        lastUsed: Math.random() > 0.5 ? new Date().toISOString() : null,
+      }))
+  }
+
   const handleCreateBot = (botConfig: any) => {
+    const wallets = generateWalletsFromGroup(
+      botConfig.walletManagement?.selectedGroup || "group-1",
+      botConfig.walletManagement?.customWallets || [],
+    )
+
     const newBot = {
       id: Date.now().toString(),
       name: `Bundler Bot ${activeBots.length + 1}`,
       tokenSymbol: botConfig.tokenSymbol || "TOKEN",
       tokenAddress: botConfig.tokenAddress,
-      wallets: botConfig.wallets || 40,
+      walletCount: wallets.length,
       progress: 0,
       status: "ready", // ready, active, paused, completed
       createdAt: new Date().toISOString(),
+      wallets: wallets,
       tokenMetadata: botConfig.tokenMetadata || {
         name: botConfig.tokenSymbol || "Token",
         symbol: botConfig.tokenSymbol || "TOKEN",
@@ -118,6 +152,19 @@ export default function BundlerPage() {
       title: "Bot Deleted",
       description: "The Bundler bot has been deleted successfully.",
     })
+  }
+
+  const updateWalletBalances = (walletId: string, updates: { solBalance?: number; tokenBalance?: number }) => {
+    if (!selectedBot) return
+
+    const updatedWallets = selectedBot.wallets.map((wallet: any) =>
+      wallet.id === walletId ? { ...wallet, ...updates } : wallet,
+    )
+
+    const updatedBot = { ...selectedBot, wallets: updatedWallets }
+
+    setActiveBots((prev) => prev.map((bot) => (bot.id === selectedBot.id ? updatedBot : bot)))
+    setSelectedBot(updatedBot)
   }
 
   // Check if any bot is created
@@ -237,7 +284,7 @@ export default function BundlerPage() {
                       </div>
                       <div>
                         <span className="text-gray-500">Wallets:</span>{" "}
-                        <span className="text-gray-300">{bot.wallets || 0}</span>
+                        <span className="text-gray-300">{bot.walletCount || 0}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -327,8 +374,8 @@ export default function BundlerPage() {
                         <TabsTrigger value="dev-trading" className="data-[state=active]:bg-gray-700">
                           Dev Trading Settings
                         </TabsTrigger>
-                        <TabsTrigger value="wallet-management" className="data-[state=active]:bg-gray-700">
-                          Wallet Management
+                        <TabsTrigger value="wallets" className="data-[state=active]:bg-gray-700">
+                          Wallets
                         </TabsTrigger>
                       </TabsList>
 
@@ -416,40 +463,12 @@ export default function BundlerPage() {
                         <DevTradingSettingsSection devTradingSettings={selectedBot.devTradingSettings} />
                       </TabsContent>
 
-                      <TabsContent value="wallet-management" className="mt-0">
-                        <Card className="border-gray-800 bg-gray-900/30">
-                          <CardHeader className="p-4 pb-2">
-                            <CardTitle className="text-sm font-medium text-gray-400">Wallet Configuration</CardTitle>
-                          </CardHeader>
-                          <CardContent className="p-4 pt-0">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <div className="text-xs text-gray-500 mb-1">Selected Group</div>
-                                <div className="text-sm text-gray-300">
-                                  {selectedBot.walletManagement?.selectedGroup || "group-1"}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500 mb-1">Total Wallets</div>
-                                <div className="text-sm text-gray-300">{selectedBot.wallets || 0}</div>
-                              </div>
-                            </div>
-                            {selectedBot.walletManagement?.customWallets &&
-                              selectedBot.walletManagement.customWallets.length > 0 && (
-                                <div className="mt-4">
-                                  <div className="text-xs text-gray-500 mb-2">Custom Wallets</div>
-                                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                                    {selectedBot.walletManagement.customWallets.map((wallet: any, index: number) => (
-                                      <div key={index} className="flex justify-between items-center text-xs">
-                                        <span className="font-mono text-gray-300 truncate">{wallet.address}</span>
-                                        <span className="text-gray-400">{wallet.amount} SOL</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                          </CardContent>
-                        </Card>
+                      <TabsContent value="wallets" className="mt-0">
+                        <WalletsTable
+                          wallets={selectedBot.wallets || []}
+                          onUpdateWallet={updateWalletBalances}
+                          tokenSymbol={selectedBot.tokenSymbol}
+                        />
                       </TabsContent>
                     </Tabs>
                   </CardContent>

@@ -113,8 +113,8 @@ export function CreateBundlerDialog({ open, onOpenChange, onCreateBot }: CreateB
             <TabsTrigger value="dev-trading" className="data-[state=active]:bg-gray-700">
               Dev Trading
             </TabsTrigger>
-            <TabsTrigger value="wallet-management" className="data-[state=active]:bg-gray-700">
-              Wallet Management
+            <TabsTrigger value="wallet-selection" className="data-[state=active]:bg-gray-700">
+              Wallet Selection
             </TabsTrigger>
           </TabsList>
 
@@ -130,7 +130,7 @@ export function CreateBundlerDialog({ open, onOpenChange, onCreateBot }: CreateB
             <DevTradingSettingsSection devTradingSettings={devTradingSettings} />
           </TabsContent>
 
-          <TabsContent value="wallet-management" className="mt-0">
+          <TabsContent value="wallet-selection" className="mt-0">
             <WalletManagementSection walletManagement={walletManagement} />
           </TabsContent>
         </Tabs>
@@ -160,7 +160,7 @@ export function CreateBundlerDialog({ open, onOpenChange, onCreateBot }: CreateB
               Cancel
             </Button>
 
-            {activeTab === "wallet-management" ? (
+            {activeTab === "wallet-selection" ? (
               <Button onClick={handleCreate} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Create Bundler Bot
               </Button>
@@ -172,7 +172,7 @@ export function CreateBundlerDialog({ open, onOpenChange, onCreateBot }: CreateB
                       ? "token-config"
                       : activeTab === "token-config"
                         ? "dev-trading"
-                        : "wallet-management"
+                        : "wallet-selection"
                   setActiveTab(nextTab)
                 }}
                 className="bg-blue-600 hover:bg-blue-700 text-white"
