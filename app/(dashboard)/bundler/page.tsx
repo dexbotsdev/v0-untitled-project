@@ -8,7 +8,6 @@ import { Plus, RefreshCw, Package, Trash2, AlertCircle } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { CreateBundlerDialog } from "@/components/bundler/create-bundler-dialog"
-import { TagBundlesDialog } from "@/components/bundler/tag-bundles-dialog"
 import { ActivityLogger } from "@/components/bundler/activity-logger"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -25,15 +24,9 @@ import { DevTradingSettingsSection } from "@/components/bundler/dev-trading-sett
 
 export default function BundlerPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isTagDialogOpen, setIsTagDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [activeBots, setActiveBots] = useState<any[]>([])
   const [selectedBot, setSelectedBot] = useState<any | null>(null)
-  const [isGeneratingBundles, setIsGeneratingBundles] = useState(false)
-  const [isFundingWallets, setIsFundingWallets] = useState(false)
-  const [isRecoveringSol, setIsRecoveringSol] = useState(false)
-  const [isTaggingBundles, setIsTaggingBundles] = useState(false)
-  const [isDeletingBundles, setIsDeletingBundles] = useState(false)
 
   const { toast } = useToast()
 
@@ -86,11 +79,6 @@ export default function BundlerPage() {
               ...bot,
               status: "active",
               progress: 0,
-              marketData: {
-                ...bot.marketData,
-                startTime: new Date().toISOString(),
-                endTime: null,
-              },
             }
           : bot,
       ),
@@ -103,11 +91,6 @@ export default function BundlerPage() {
               ...prev,
               status: "active",
               progress: 0,
-              marketData: {
-                ...prev.marketData,
-                startTime: new Date().toISOString(),
-                endTime: null,
-              },
             }
           : null,
       )
@@ -135,94 +118,6 @@ export default function BundlerPage() {
       title: "Bot Deleted",
       description: "The Bundler bot has been deleted successfully.",
     })
-  }
-
-  const handleGenerateBundles = async (count = 10) => {
-    if (!selectedBot) return
-
-    setIsGeneratingBundles(true)
-
-    // Simulate API call with delay
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    // Update the bot with generated bundles
-    const newBundles = Array(count)
-      .fill(0)
-      .map((_, i) => {
-        const index = selectedBot.bundleData.length + i
-        return {
-          id: `bundle-${Date.now()}-${i}`,
-          wallets: Array(selectedBot.bundleSize)
-            .fill(0)
-            .map((_, j) => `${index}-${j}xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosg`),
-          status: "pending",
-          solBalance: 0,
-          tokenBalance: 0,
-          transactionCount: selectedBot.bundleSize,
-          lastExecution: null,
-          tag: null,
-        }
-      })
-
-    const updatedBot = {
-      ...selectedBot,
-      bundleData: [...selectedBot.bundleData, ...newBundles],
-      stats: {
-        ...selectedBot.stats,
-        bundlesGenerated: selectedBot.stats.bundlesGenerated + count,
-      },
-    }
-
-    setActiveBots((prev) => prev.map((bot) => (bot.id === selectedBot.id ? updatedBot : bot)))
-
-    setSelectedBot(updatedBot)
-    setIsGeneratingBundles(false)
-
-    toast({
-      title: "Bundles Generated",
-      description: `Successfully generated ${count} bundle groups.`,
-    })
-  }
-
-  const handleTagBundles = async (bundles: string[], tag: string) => {
-    if (!selectedBot) return
-
-    setIsTaggingBundles(true)
-
-    // Simulate API call with delay
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    // Update the bot with tagged bundles
-    const updatedBundleData = selectedBot.bundleData.map((bundle: any) => {
-      if (bundles.includes(bundle.id)) {
-        return {
-          ...bundle,
-          tag,
-        }
-      }
-      return bundle
-    })
-
-    const updatedBot = {
-      ...selectedBot,
-      bundleData: updatedBundleData,
-    }
-
-    setActiveBots((prev) => prev.map((bot) => (bot.id === selectedBot.id ? updatedBot : bot)))
-
-    setSelectedBot(updatedBot)
-    setIsTaggingBundles(false)
-
-    toast({
-      title: "Bundles Tagged",
-      description: `Successfully tagged ${bundles.length} bundle groups with "${tag}".`,
-    })
-  }
-
-  const formatNumber = (num: number) => {
-    return new Intl.NumberFormat("en-US", {
-      maximumFractionDigits: 2,
-    }).format(num)
   }
 
   // Check if any bot is created
@@ -322,14 +217,27 @@ export default function BundlerPage() {
                       </div>
                       <div>
                         <div className="text-sm font-semibold text-white">{bot.tokenSymbol}</div>
+                        <div className="text-xs text-gray-400">{bot.tokenMetadata?.name || "Token Name"}</div>
                       </div>
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="mt-2">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span className="text-gray-400">Progress</span>
-                        <span className="text-blue-400">{bot.progress}%</span>
+                    {/* Token Configuration Info */}
+                    <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                      <div>
+                        <span className="text-gray-500">Platform:</span>{" "}
+                        <span className="text-gray-300">{bot.tokenConfig?.platform || "raydium-amm"}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Type:</span>{" "}
+                        <span className="text-gray-300">{bot.tokenConfig?.tokenType || "spl"}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Dev Buy:</span>{" "}
+                        <span className="text-gray-300">{bot.devTradingSettings?.devBuyAmount || 0} SOL</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Wallets:</span>{" "}
+                        <span className="text-gray-300">{bot.wallets || 0}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -411,22 +319,137 @@ export default function BundlerPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <Tabs defaultValue="statistics" className="w-full">
+                    <Tabs defaultValue="token-info" className="w-full">
                       <TabsList className="bg-gray-800/50 mb-4">
-                        <TabsTrigger value="statistics" className="data-[state=active]:bg-gray-700">
-                          Live Statistics
+                        <TabsTrigger value="token-info" className="data-[state=active]:bg-gray-700">
+                          Token Information
                         </TabsTrigger>
                         <TabsTrigger value="dev-trading" className="data-[state=active]:bg-gray-700">
                           Dev Trading Settings
                         </TabsTrigger>
+                        <TabsTrigger value="wallet-management" className="data-[state=active]:bg-gray-700">
+                          Wallet Management
+                        </TabsTrigger>
                       </TabsList>
 
-                      <TabsContent value="statistics" className="mt-0">
-                        <DevTradingSettingsSection devTradingSettings={selectedBot.devTradingSettings} />
+                      <TabsContent value="token-info" className="mt-0">
+                        <div className="space-y-4">
+                          {/* Token Metadata Card */}
+                          <Card className="border-gray-800 bg-gray-900/30">
+                            <CardHeader className="p-4 pb-2">
+                              <CardTitle className="text-sm font-medium text-gray-400">Token Metadata</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Name</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenMetadata?.name || "N/A"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Symbol</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenMetadata?.symbol || "N/A"}
+                                  </div>
+                                </div>
+                                <div className="col-span-2">
+                                  <div className="text-xs text-gray-500 mb-1">Description</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenMetadata?.description || "N/A"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Website</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenMetadata?.website || "N/A"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Twitter</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenMetadata?.twitter || "N/A"}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Token Configuration Card */}
+                          <Card className="border-gray-800 bg-gray-900/30">
+                            <CardHeader className="p-4 pb-2">
+                              <CardTitle className="text-sm font-medium text-gray-400">Token Configuration</CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Token Type</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenConfig?.tokenType || "spl"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Platform</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenConfig?.platform || "raydium-amm"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Revoke Authority</div>
+                                  <div className="text-sm text-gray-300">
+                                    {selectedBot.tokenConfig?.revokeAuthority ? "Yes" : "No"}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs text-gray-500 mb-1">Token Address</div>
+                                  <div className="text-sm text-gray-300 font-mono truncate">
+                                    {selectedBot.tokenAddress || "Generated on creation"}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
                       </TabsContent>
 
                       <TabsContent value="dev-trading" className="mt-0">
                         <DevTradingSettingsSection devTradingSettings={selectedBot.devTradingSettings} />
+                      </TabsContent>
+
+                      <TabsContent value="wallet-management" className="mt-0">
+                        <Card className="border-gray-800 bg-gray-900/30">
+                          <CardHeader className="p-4 pb-2">
+                            <CardTitle className="text-sm font-medium text-gray-400">Wallet Configuration</CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <div className="text-xs text-gray-500 mb-1">Selected Group</div>
+                                <div className="text-sm text-gray-300">
+                                  {selectedBot.walletManagement?.selectedGroup || "group-1"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs text-gray-500 mb-1">Total Wallets</div>
+                                <div className="text-sm text-gray-300">{selectedBot.wallets || 0}</div>
+                              </div>
+                            </div>
+                            {selectedBot.walletManagement?.customWallets &&
+                              selectedBot.walletManagement.customWallets.length > 0 && (
+                                <div className="mt-4">
+                                  <div className="text-xs text-gray-500 mb-2">Custom Wallets</div>
+                                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                                    {selectedBot.walletManagement.customWallets.map((wallet: any, index: number) => (
+                                      <div key={index} className="flex justify-between items-center text-xs">
+                                        <span className="font-mono text-gray-300 truncate">{wallet.address}</span>
+                                        <span className="text-gray-400">{wallet.amount} SOL</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                          </CardContent>
+                        </Card>
                       </TabsContent>
                     </Tabs>
                   </CardContent>
@@ -439,16 +462,6 @@ export default function BundlerPage() {
 
       {/* Create Bot Dialog */}
       <CreateBundlerDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} onCreateBot={handleCreateBot} />
-
-      {/* Tag Bundles Dialog */}
-      {selectedBot && (
-        <TagBundlesDialog
-          open={isTagDialogOpen}
-          onOpenChange={setIsTagDialogOpen}
-          onTagBundles={handleTagBundles}
-          bundleCount={selectedBot.stats.bundlesGenerated}
-        />
-      )}
 
       {/* Delete Bot Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
@@ -476,21 +489,5 @@ export default function BundlerPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-
-// Helper component for statistics cards
-function StatCard({ title, value, prefix = "", suffix = "" }) {
-  return (
-    <Card className="bg-gray-900/30 border-gray-800">
-      <CardContent className="p-4">
-        <div className="text-xs text-gray-400 mb-1">{title}</div>
-        <div className="text-lg font-semibold text-white">
-          {prefix}
-          {value}
-          {suffix ? ` ${suffix}` : ""}
-        </div>
-      </CardContent>
-    </Card>
   )
 }
