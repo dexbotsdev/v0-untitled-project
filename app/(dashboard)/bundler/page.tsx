@@ -460,18 +460,6 @@ export default function BundlerPage() {
                             <CardContent className="p-4 pt-0">
                               <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <div className="text-xs text-gray-500 mb-1">Name</div>
-                                  <div className="text-sm text-gray-300">
-                                    {selectedBot.tokenMetadata?.name || "N/A"}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-gray-500 mb-1">Symbol</div>
-                                  <div className="text-sm text-gray-300">
-                                    {selectedBot.tokenMetadata?.symbol || "N/A"}
-                                  </div>
-                                </div>
-                                <div>
                                   <div className="text-xs text-gray-500 mb-1">Total Buys</div>
                                   <div className="text-sm text-gray-300 font-semibold">
                                     {formatNumber(selectedBot.marketData?.totalBuys || 0)}
@@ -502,18 +490,6 @@ export default function BundlerPage() {
                             </CardHeader>
                             <CardContent className="p-4 pt-0">
                               <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                  <div className="text-xs text-gray-500 mb-1">Token Type</div>
-                                  <div className="text-sm text-gray-300">
-                                    {selectedBot.tokenConfig?.tokenType || "spl"}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-xs text-gray-500 mb-1">Platform</div>
-                                  <div className="text-sm text-gray-300">
-                                    {selectedBot.tokenConfig?.platform || "raydium-amm"}
-                                  </div>
-                                </div>
                                 <div>
                                   <div className="text-xs text-gray-500 mb-1">Revoke Authority</div>
                                   <div className="text-sm text-gray-300">
