@@ -11,8 +11,7 @@ import { ActivityLogs } from "@/components/tokens/activity-logs"
 import { BundleWizardDialog } from "@/components/tokens/bundle-wizard-dialog"
 import { SellTokensDialog } from "@/components/tokens/sell-tokens-dialog"
 import { useBundlerSDK, useWalletBalances, useTokenPrice } from "@/hooks/use-bundler-sdk"
-import { bundlerSDK, type BundleConfig } from "@/lib/bundler-sdk"
-import { addGlobalLog } from "@/hooks/use-activity-logs" // Declare the variable here
+import { bundlerSDK, type BundleConfig } from "@/lib/bundler-sdk" // Declare the variable here
 
 interface Task {
   id: string
@@ -877,7 +876,7 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
                     size="sm"
                     variant="outline"
                     className="h-7 px-3 text-xs border-gray-700 text-[#ECF1F0] bg-transparent hover:bg-gray-800"
-                    onClick={() => addGlobalLog("system", "system", "Refreshed activity logs")}
+                    onClick={() => bundlerSDK.log("system", "info", "Refreshed activity logs")}
                   >
                     Refresh
                   </Button>
