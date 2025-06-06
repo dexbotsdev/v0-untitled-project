@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/hooks/use-toast"
 import { PnlCard } from "@/components/tokens/pnl-card"
@@ -9,8 +9,10 @@ import { WalletTable } from "@/components/tokens/wallet-table"
 import { Play, Square, Percent } from "lucide-react"
 import { ActivityLogs } from "@/components/tokens/activity-logs"
 import { BundleWizardDialog } from "@/components/tokens/bundle-wizard-dialog"
-// Add the SellTokensDialog import
 import { SellTokensDialog } from "@/components/tokens/sell-tokens-dialog"
+import { useBundlerSDK, useWalletBalances, useTokenPrice } from "@/hooks/use-bundler-sdk"
+import { bundlerSDK, type BundleConfig } from "@/lib/bundler-sdk"
+import { addGlobalLog } from "@/hooks/use-activity-logs" // Declare the variable here
 
 interface Task {
   id: string
@@ -134,355 +136,57 @@ interface Wallet {
 }
 
 export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: TokenManagementWidgetProps) {
+  // Use SDK hooks
+  const {
+    createBundle,
+    launchBundle,
+    getBundleForToken,
+    startVolumeBoost,
+    stopVolumeBoost,
+    sellTokens,
+    isConnected,
+    bundles,
+    tokens,
+  } = useBundlerSDK()
+
+  // Token-specific hooks
+  const tokenPrice = useTokenPrice(selectedToken?.address || "")
+  const walletBalances = useWalletBalances(selectedToken?.address)
+
   // Store token data
   const [tokenData, setTokenData] = useState<TokenData | null>(null)
   const [isLoadingTokenData, setIsLoadingTokenData] = useState(false)
-  const [pumpFunData, setPumpFunData] = useState<PumpFunTokenData | null>(null)
-
-  // Store real-time price data from DexScreener
-  const [dexScreenerData, setDexScreenerData] = useState<{
-    price: number
-    priceUsd: number
-    priceChange: number
-    lastUpdated: string
-  } | null>(null)
-  const [isDexScreenerLoading, setIsDexScreenerLoading] = useState(false)
-
-  // Map to store tasks for each token (by token address)
-  const [tokenTasks, setTokenTasks] = useState<Record<string, Task[]>>({})
-
-  // Current token's tasks
-  const [currentTasks, setCurrentTasks] = useState<Task[]>([])
-
-  // Track if any task is running for the current token
-  const [isAnyTaskRunning, setIsAnyTaskRunning] = useState(false)
 
   // Track active tabs
   const [activeTabs, setActiveTabs] = useState<string[]>([])
-
-  // Track the currently selected tab
   const [selectedTab, setSelectedTab] = useState<string>("")
-
-  // Track running state for each tab
   const [tabRunningState, setTabRunningState] = useState<Record<string, boolean>>({})
-
-  // Mock wallets data for each tab
   const [tabWallets, setTabWallets] = useState<Record<string, Wallet[]>>({})
-
-  // Track tab counters for Volume and Trade
   const [tabCounters, setTabCounters] = useState<Record<string, number>>({
     volume: 0,
     trade: 0,
   })
 
-  // Track if Meta task is completed
+  // Bundle and task state
+  const [currentBundle, setCurrentBundle] = useState<BundleConfig | null>(null)
   const [isMetaCompleted, setIsMetaCompleted] = useState(false)
+  const [isAnyTaskRunning, setIsAnyTaskRunning] = useState(false)
 
-  // Reference to the current Meta task
-  const metaTaskRef = useRef<Task | null>(null)
-
-  // Reference to store the interval ID for DexScreener updates
-  const dexScreenerIntervalRef = useRef<NodeJS.Timeout | null>(null)
-
-  // All logs from all tasks
-  const [allLogs, setAllLogs] = useState<
-    Array<{ timestamp: string; message: string; taskId: string; taskType: string }>
-  >([])
-
-  // Add this to the component's state
+  // Dialog states
   const [isBundleWizardOpen, setIsBundleWizardOpen] = useState(false)
-
-  // Update the tabBundleModes state to include platform information
-  const [tabBundleModes, setTabBundleModes] = useState<
-    Record<
-      string,
-      {
-        mode: string
-        platform: string
-        tokenTax?: number
-        revokeFreeze?: boolean
-        revokeMint?: boolean
-      }
-    >
-  >({})
-
-  // Add these state variables inside the TokenManagementWidget component
   const [selectedWallets, setSelectedWallets] = useState<Record<string, number[]>>({})
   const [isSellDialogOpen, setIsSellDialogOpen] = useState(false)
   const [currentSellTabId, setCurrentSellTabId] = useState<string>("")
 
-  // Function to fetch data from DexScreener API
-  const fetchDexScreenerData = async (tokenAddress: string) => {
-    if (!tokenAddress) return
+  // Bundle modes for tabs
+  const [tabBundleModes, setTabBundleModes] = useState<
+    Record<string, { mode: string; platform: string; tokenTax?: number; revokeFreeze?: boolean; revokeMint?: boolean }>
+  >({})
 
-    setIsDexScreenerLoading(true)
-
-    try {
-      // Set a timeout for the fetch request
-      const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
-        const controller = new AbortController()
-        const { signal } = controller
-
-        const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-        try {
-          const response = await fetch(url, { ...options, signal })
-          clearTimeout(timeoutId)
-          return response
-        } catch (error) {
-          clearTimeout(timeoutId)
-          throw error
-        }
-      }
-
-      const response = await fetchWithTimeout(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`)
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch DexScreener data: ${response.status}`)
-      }
-
-      const data: DexScreenerData = await response.json()
-
-      // Check if we have any pairs data
-      if (data.pairs && data.pairs.length > 0) {
-        // Get the first pair (usually the most relevant one)
-        const pair = data.pairs[0]
-
-        // Extract price and price change data
-        const price = Number.parseFloat(pair.priceNative)
-        const priceUsd = Number.parseFloat(pair.priceUsd)
-        const priceChange = pair.priceChange.h24 // 24-hour price change
-
-        // Update the state with the new data
-        setDexScreenerData({
-          price,
-          priceUsd,
-          priceChange,
-          lastUpdated: new Date().toLocaleTimeString(),
-        })
-
-        // Add a log entry for the price update
-        addGlobalLog(
-          "system",
-          "system",
-          `Price updated: ${price.toFixed(8)} SOL ($${priceUsd.toFixed(6)}) | Change: ${priceChange.toFixed(2)}%`,
-        )
-      } else {
-        console.log("No pairs found in DexScreener response")
-        // Generate mock price data if no pairs found
-        generateMockPriceData()
-      }
-    } catch (error) {
-      console.error("Error fetching DexScreener data:", error)
-      addGlobalLog(
-        "system",
-        "system",
-        `Error fetching price data: ${error instanceof Error ? error.message : "Unknown error"}`,
-      )
-
-      // Generate mock price data on error
-      generateMockPriceData()
-    } finally {
-      setIsDexScreenerLoading(false)
-    }
-  }
-
-  // Add a function to generate mock price data
-  const generateMockPriceData = () => {
-    const price = Math.random() * 0.01 // Random price between 0 and 0.01 SOL
-    const priceUsd = price * 103 // Assuming 1 SOL = $103
-    const priceChange = Math.random() * 20 - 10 // Between -10% and +10%
-
-    setDexScreenerData({
-      price,
-      priceUsd,
-      priceChange,
-      lastUpdated: new Date().toLocaleTimeString(),
-    })
-
-    addGlobalLog(
-      "system",
-      "system",
-      `Using mock price data: ${price.toFixed(8)} SOL ($${priceUsd.toFixed(6)}) | Change: ${priceChange.toFixed(2)}%`,
-    )
-  }
-
-  // Add this function after the fetchDexScreenerData function
-  const checkIfTokenIsLaunched = async (tokenAddress: string): Promise<boolean> => {
-    try {
-      // Use the same DexScreener API to check if the token has a price
-      const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`)
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch DexScreener data: ${response.status}`)
-      }
-
-      const data: DexScreenerData = await response.json()
-
-      // If the token has pairs and at least one pair has a price, it's considered launched
-      return (
-        data.pairs &&
-        data.pairs.length > 0 &&
-        data.pairs.some((pair) => Number.parseFloat(pair.priceUsd) > 0 || Number.parseFloat(pair.priceNative) > 0)
-      )
-    } catch (error) {
-      console.error("Error checking if token is launched:", error)
-      return false // Assume not launched if there's an error
-    }
-  }
-
-  // Set up interval to fetch DexScreener data every 5 seconds
-  useEffect(() => {
-    // Only set up the interval if we have a token address
-    if (selectedToken?.address) {
-      // Fetch immediately on mount
-      fetchDexScreenerData(selectedToken.address)
-
-      // Set up interval for subsequent fetches
-      dexScreenerIntervalRef.current = setInterval(() => {
-        fetchDexScreenerData(selectedToken.address)
-      }, 5000) // 5 seconds interval
-
-      // Clean up interval on unmount
-      return () => {
-        if (dexScreenerIntervalRef.current) {
-          clearInterval(dexScreenerIntervalRef.current)
-          dexScreenerIntervalRef.current = null
-        }
-      }
-    }
-  }, [selectedToken?.address])
-
-  // Update the fetchPumpFunTokenData function to handle the new API response format
-  // In the fetchPumpFunTokenData function, make sure to include pump_swap_pool in the returned data
-  const fetchPumpFunTokenData = async (address: string) => {
-    if (!address) return null
-
-    setIsLoadingTokenData(true)
-    addGlobalLog("system", "system", `Fetching token data for ${address}...`)
-
-    try {
-      // Set a timeout for the fetch request
-      const fetchWithTimeout = async (url: string, options = {}, timeout = 5000) => {
-        const controller = new AbortController()
-        const { signal } = controller
-
-        const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-        try {
-          const response = await fetch(url, { ...options, signal })
-          clearTimeout(timeoutId)
-          return response
-        } catch (error) {
-          clearTimeout(timeoutId)
-          throw error
-        }
-      }
-
-      // Try to fetch from the API with a timeout
-      const response = await fetchWithTimeout(`https://virgoserver.onrender.com/coin/${address}`)
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch token data: ${response.status}`)
-      }
-
-      const data = await response.json()
-      addGlobalLog("system", "system", `Token data fetched successfully`)
-
-      // Calculate price change (placeholder - in a real app you might fetch historical data)
-      // For now we'll use a random value between -10% and +10%
-      const randomPriceChange = Math.random() * 20 - 10
-
-      return {
-        name: data.name || "Unknown Token",
-        symbol: data.symbol || "???",
-        mint: data.mint || address,
-        description: data.description || "",
-        image_uri: data.image_uri || null,
-        twitter: data.twitter || "",
-        telegram: data.telegram || "",
-        website: data.website || "",
-        created_timestamp: data.created_timestamp || Date.now(),
-        market_cap: data.market_cap || 0,
-        total_supply: data.total_supply || 0,
-        virtual_sol_reserves: data.virtual_sol_reserves || 0,
-        virtual_token_reserves: data.virtual_token_reserves || 0,
-        real_sol_reserves: data.real_sol_reserves || 0,
-        real_token_reserves: data.real_token_reserves || 0,
-        last_trade_timestamp: data.last_trade_timestamp || 0,
-        usd_market_cap: data.usd_market_cap || 0,
-        creator: data.creator,
-        pump_swap_pool: data.pump_swap_pool, // Include this field
-        // Add calculated or placeholder fields
-        priceChange24h: randomPriceChange,
-      }
-    } catch (error) {
-      console.error("Error fetching PumpFun token data:", error)
-      addGlobalLog(
-        "system",
-        "system",
-        `Error fetching token data: ${error instanceof Error ? error.message : "Unknown error"}`,
-      )
-
-      // Instead of showing an error toast, we'll generate mock data as a fallback
-      const mockData = generateMockTokenData(address)
-      addGlobalLog("system", "system", "Using generated mock data instead")
-
-      return mockData
-    } finally {
-      setIsLoadingTokenData(false)
-    }
-  }
-
-  // Add a new function to generate mock token data when the API fails
-  const generateMockTokenData = (address: string) => {
-    // Generate random values for the mock data
-    const marketCap = Math.floor(Math.random() * 10000000) + 1000000
-    const totalSupply = Math.floor(Math.random() * 1000000000) + 10000000
-    const priceChange = Math.random() * 20 - 10 // Between -10% and +10%
-    const createdTimestamp = Date.now() - Math.floor(Math.random() * 30 * 24 * 60 * 60 * 1000) // Random date in the last 30 days
-
-    // If we have the token data from the selected token, use that
-    const tokenName = selectedToken?.name || "Unknown Token"
-    const tokenSymbol = selectedToken?.symbol || address.substring(0, 4).toUpperCase()
-
-    return {
-      name: tokenName,
-      symbol: tokenSymbol,
-      mint: address,
-      description: `${tokenName} is a Solana token.`,
-      image_uri: selectedToken?.image || null,
-      twitter: selectedToken?.twitterUrl || "",
-      telegram: selectedToken?.telegramUrl || "",
-      website: selectedToken?.websiteUrl || "",
-      created_timestamp: createdTimestamp,
-      market_cap: marketCap,
-      total_supply: totalSupply,
-      virtual_sol_reserves: marketCap * 0.01,
-      virtual_token_reserves: totalSupply * 0.5,
-      real_sol_reserves: marketCap * 0.005,
-      real_token_reserves: totalSupply * 0.25,
-      last_trade_timestamp: Date.now() - Math.floor(Math.random() * 60 * 60 * 1000), // Random time in the last hour
-      usd_market_cap: marketCap * 0.8, // Slightly lower USD market cap
-      creator: selectedToken?.devAddress || generateRandomAddress(),
-      pump_swap_pool: Math.random() > 0.5 ? generateRandomAddress() : null, // 50% chance of having a pump swap pool
-      priceChange24h: priceChange,
-    }
-  }
-
-  // Use selectedToken if provided
+  // Initialize token data when selectedToken changes
   useEffect(() => {
     if (selectedToken) {
       console.log("Selected token changed:", selectedToken)
-
-      // Clear any existing DexScreener interval
-      if (dexScreenerIntervalRef.current) {
-        clearInterval(dexScreenerIntervalRef.current)
-        dexScreenerIntervalRef.current = null
-      }
-
-      // Reset DexScreener data
-      setDexScreenerData(null)
 
       // Set initial token data
       setTokenData({
@@ -496,7 +200,16 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
         image: selectedToken.image,
         address: selectedToken.address || "",
         devAddress: selectedToken.devAddress || "",
+        bundleMode: "",
+        isPumpSwapMigrated: false,
       })
+
+      // Check if bundle exists for this token
+      if (selectedToken.address) {
+        const bundle = getBundleForToken(selectedToken.address)
+        setCurrentBundle(bundle)
+        setIsMetaCompleted(!!bundle && bundle.status === "launched")
+      }
 
       // Reset tabs when switching tokens
       setActiveTabs([])
@@ -504,90 +217,92 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
       setTabRunningState({})
       setTabWallets({})
       setTabCounters({ volume: 0, trade: 0 })
-      setAllLogs([]) // Clear logs when switching tokens
-      setPumpFunData(null) // Clear previous PumpFun data
+    }
+  }, [selectedToken, getBundleForToken])
 
-      // If token has an address, try to fetch PumpFun data
-      if (selectedToken.address) {
-        fetchPumpFunTokenData(selectedToken.address).then((data) => {
-          if (data) {
-            setPumpFunData(data)
+  // Update token data when price changes
+  useEffect(() => {
+    if (tokenPrice && tokenData) {
+      setTokenData((prev) => ({
+        ...prev!,
+        marketCap: tokenPrice.marketCap,
+        usdMarketCap: tokenPrice.marketCap,
+        price: tokenPrice.price?.toString(),
+        priceChange: tokenPrice.priceChange24h,
+        lastUpdated: new Date().toLocaleTimeString(),
+      }))
+    }
+  }, [tokenPrice, tokenData])
 
-            // Update token data with fetched information
-            setTokenData((prev) => {
-              if (!prev) return null
-              return {
-                ...prev,
-                name: data.name || prev.name,
-                symbol: data.symbol || prev.symbol,
-                twitter: data.twitter || prev.twitter,
-                telegram: data.telegram || prev.telegram,
-                website: data.website || prev.website,
-                image: data.image_uri || prev.image,
-                marketCap: data.market_cap,
-                usdMarketCap: data.usd_market_cap,
-                priceChange: data.priceChange24h,
-                price: data.price,
-                devAddress: data.creator,
-                launchedDate: new Date(data.created_timestamp).toLocaleString(),
-                lastUpdated: new Date().toLocaleString(),
-              }
-            })
+  // Update wallet balances in tabs
+  useEffect(() => {
+    if (walletBalances.length > 0) {
+      // Group balances by tab (you might need to track which wallets belong to which tab)
+      const updatedTabWallets = { ...tabWallets }
+
+      Object.keys(updatedTabWallets).forEach((tabId) => {
+        updatedTabWallets[tabId] = updatedTabWallets[tabId].map((wallet) => {
+          const balance = walletBalances.find((b) => b.address === wallet.address)
+          if (balance) {
+            return {
+              ...wallet,
+              solBalance: balance.solBalance,
+              tokenBalance: balance.tokenBalance,
+            }
           }
+          return wallet
+        })
+      })
+
+      setTabWallets(updatedTabWallets)
+    }
+  }, [walletBalances])
+
+  // Listen for bundle events
+  useEffect(() => {
+    const handleBundleLaunched = (bundle: BundleConfig) => {
+      if (bundle.tokenAddress === selectedToken?.address) {
+        setCurrentBundle(bundle)
+        setIsMetaCompleted(true)
+
+        // Update token data with bundle information
+        setTokenData((prev) => ({
+          ...prev!,
+          address: bundle.tokenAddress,
+          launchedDate: new Date().toLocaleString(),
+        }))
+
+        toast({
+          title: "Bundle Launched",
+          description: `Bundle for ${bundle.tokenSymbol} has been launched successfully!`,
         })
       }
+    }
 
-      // Load tasks for this token if they exist
-      if (tokenTasks[selectedToken.id]) {
-        setCurrentTasks(tokenTasks[selectedToken.id])
-
-        // Check if any task is running
-        const anyRunning = tokenTasks[selectedToken.id].some((task) => task.isRunning)
-        setIsAnyTaskRunning(anyRunning)
-
-        // Check if Meta task is completed
-        const metaCompleted = tokenTasks[selectedToken.id].some((task) => task.type === "meta" && task.completed)
-        setIsMetaCompleted(metaCompleted)
-        console.log("Meta completed state loaded:", metaCompleted)
-      } else {
-        setCurrentTasks([])
-        setIsAnyTaskRunning(false)
-        setIsMetaCompleted(false)
+    const handleBundleCreated = (bundle: BundleConfig) => {
+      if (bundle.tokenAddress === selectedToken?.address) {
+        setCurrentBundle(bundle)
       }
     }
 
-    // Clean up on unmount
+    bundlerSDK.on("bundle:launched", handleBundleLaunched)
+    bundlerSDK.on("bundle:created", handleBundleCreated)
+
     return () => {
-      if (dexScreenerIntervalRef.current) {
-        clearInterval(dexScreenerIntervalRef.current)
-        dexScreenerIntervalRef.current = null
-      }
+      bundlerSDK.off("bundle:launched", handleBundleLaunched)
+      bundlerSDK.off("bundle:created", handleBundleCreated)
     }
-  }, [selectedToken])
+  }, [selectedToken?.address])
 
-  // Check if a task type already exists for the current token
-  const hasTaskType = (type: string) => {
-    return currentTasks.some((task) => task.type === type)
-  }
-
-  // Check if Meta task exists
-  const hasMetaTask = () => {
-    return hasTaskType("meta")
-  }
-
-  // Check if token has an address
+  // Helper functions
   const hasTokenAddress = () => {
-    console.log("HasTokenAddress???", tokenData?.address && tokenData.address.trim() !== "")
-
     return tokenData?.address && tokenData.address.trim() !== ""
   }
 
-  // Generate a random address
   const generateRandomAddress = () => {
     return `0x${Array.from({ length: 40 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`
   }
 
-  // Generate mock wallets
   const generateMockWallets = (count: number): Wallet[] => {
     return Array.from({ length: count }, (_, index) => ({
       id: index + 1,
@@ -598,83 +313,14 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     }))
   }
 
-  // Add a log to the global logs array
-  const addGlobalLog = (taskId: string, taskType: string, message: string) => {
-    const now = new Date()
-    const timestamp = now.toLocaleTimeString()
-
-    setAllLogs((prev) => [
-      ...prev,
-      {
-        timestamp,
-        message,
-        taskId,
-        taskType,
-      },
-    ])
-  }
-
-  // Update the handleTaskComplete function to enable Bundle button when Meta completes
-  const handleTaskComplete = (taskType: string) => {
-    if (taskType === "meta" && tokenData) {
-      console.log("Meta task completed, updating token address...")
-
-      // Generate a random address for the token when Meta task completes
-      const newAddress = generateRandomAddress()
-      const newDevAddress = generateRandomAddress()
-
-      // Update token data with the new address
-      setTokenData((prev) => {
-        if (!prev) return null
-        return {
-          ...prev,
-          address: newAddress,
-          devAddress: newDevAddress,
-        }
-      })
-
-      // Update the selected token in the parent component if needed
-      if (selectedToken) {
-        selectedToken.address = newAddress
-        selectedToken.devAddress = newDevAddress
-      }
-
-      // Mark Meta as completed
-      setIsMetaCompleted(true)
-      console.log("Meta completed state set to true")
-
-      // Add a global log for meta completion
-      addGlobalLog("meta", "meta", "Token address has been generated successfully.")
-
-      toast({
-        title: "Metadata Task Completed",
-        description: "Token address has been generated successfully.",
-      })
-    }
-  }
-
-  // Determine if Volume button should be disabled
-  const isVolumeDisabled = () => {
-    return !hasTokenAddress() // Volume is disabled if token doesn't have an address
-  }
-
-  // Determine if Trade button should be disabled
-  const isTradeDisabled = () => {
-    return !hasTokenAddress() // Trade is disabled if token doesn't have an address
-  }
-
-  // Update the createTab function to handle creating the first tab
+  // Create tab function updated to use SDK
   const createTab = async (type: "meta" | "bundle" | "volume" | "trade") => {
     if (!tokenData) return
 
     console.log(`Creating ${type} tab/task...`)
-    console.log("Current state - Meta completed:", isMetaCompleted)
-    console.log("Current state - Has address:", hasTokenAddress())
-    console.log("Current state - Active tabs:", activeTabs)
 
-    // For Bundle tab, add validation
+    // For Bundle tab, open the bundle wizard
     if (type === "bundle") {
-      // Check if Bundle tab already exists (only one Bundle tab allowed)
       const bundleExists = activeTabs.some((tab) => tab.startsWith("bundle"))
       if (bundleExists) {
         toast({
@@ -684,13 +330,11 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
         })
         return
       }
-
-      // Open the bundle wizard instead of directly creating a tab
       handleOpenBundleWizard()
       return
     }
 
-    // For Meta task, we don't create a tab but a task
+    // For Meta task, simulate completion and generate address
     if (type === "meta") {
       if (hasTokenAddress()) {
         toast({
@@ -701,112 +345,31 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
         return
       }
 
-      if (hasMetaTask()) {
-        toast({
-          title: "Task Already Exists",
-          description: "A Metadata task already exists for this token.",
-          variant: "destructive",
-        })
-        return
-      }
+      // Generate address and mark as completed
+      const newAddress = generateRandomAddress()
+      const newDevAddress = generateRandomAddress()
 
-      // Create a Meta task
-      const taskId = `meta-${Date.now().toString(36)}`
-      const newTask: Task = {
-        id: taskId,
-        title: `Metadata Task for ${tokenData.symbol}`,
-        type: "meta",
-        isRunning: true, // Auto-start the Meta task
-        logs: [
-          {
-            timestamp: new Date().toLocaleTimeString(),
-            message: `Starting Metadata task for ${tokenData.symbol}...`,
-          },
-          {
-            timestamp: new Date().toLocaleTimeString(),
-            message: "Fetching token metadata...",
-          },
-        ],
-        completed: false,
-      }
-
-      // Add logs to global logs
-      newTask.logs?.forEach((log) => {
-        addGlobalLog(taskId, "meta", log.message)
-      })
-
-      // Store the Meta task in the ref for later access
-      metaTaskRef.current = newTask
-
-      // Add the new task to the current tasks
-      const updatedTasks = [...currentTasks, newTask]
-      setCurrentTasks(updatedTasks)
-
-      // Update the token tasks map
-      setTokenTasks((prev) => ({
-        ...prev,
-        [selectedToken.id]: updatedTasks,
+      setTokenData((prev) => ({
+        ...prev!,
+        address: newAddress,
+        devAddress: newDevAddress,
       }))
 
-      // Set any task running to true
-      setIsAnyTaskRunning(true)
+      if (selectedToken) {
+        selectedToken.address = newAddress
+        selectedToken.devAddress = newDevAddress
+      }
 
-      // Simulate Meta task completion after 3 seconds
-      setTimeout(() => {
-        console.log("Meta task completing...")
-
-        if (!metaTaskRef.current) return
-
-        const finalLogs = [
-          ...metaTaskRef.current.logs,
-          { timestamp: new Date().toLocaleTimeString(), message: "Analyzing token properties..." },
-          { timestamp: new Date().toLocaleTimeString(), message: "Token address generated successfully." },
-          { timestamp: new Date().toLocaleTimeString(), message: "Developer wallet assigned." },
-          { timestamp: new Date().toLocaleTimeString(), message: "Metadata task completed." },
-        ]
-
-        // Add these logs to global logs
-        finalLogs.slice(metaTaskRef.current.logs.length).forEach((log) => {
-          addGlobalLog(taskId, "meta", log.message)
-        })
-
-        // Create a completed version of the task
-        const completedMetaTask = {
-          ...metaTaskRef.current,
-          isRunning: false,
-          logs: finalLogs,
-          completed: true,
-        }
-
-        // Update the task with completed status and logs
-        const completedTasks = currentTasks.map((task) => (task.id === completedMetaTask.id ? completedMetaTask : task))
-
-        setCurrentTasks(completedTasks)
-
-        // Update the token tasks map
-        setTokenTasks((prev) => ({
-          ...prev,
-          [selectedToken.id]: completedTasks,
-        }))
-
-        // Set any task running to false
-        setIsAnyTaskRunning(false)
-
-        // Complete the Meta task
-        handleTaskComplete("meta")
-
-        console.log("Meta task completed, Bundle should be enabled now")
-      }, 3000)
+      setIsMetaCompleted(true)
 
       toast({
-        title: "Meta Task Created",
-        description: "Metadata task has been created and started automatically.",
+        title: "Meta Task Completed",
+        description: "Token address has been generated successfully.",
       })
-
       return
     }
 
-    // Apply conditional rules for tab creation
+    // For Volume and Trade tabs
     if (type === "volume" || type === "trade") {
       setTabCounters((prev) => ({
         ...prev,
@@ -814,79 +377,15 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
       }))
     }
 
-    // For Volume and Trade, increment the counter
-    if (type === "volume" || type === "trade") {
-      setTabCounters((prev) => ({
-        ...prev,
-        [type]: prev[type] + 1,
-      }))
-    }
-
-    // Create a unique tab ID
     const tabId = `${type}-${Date.now().toString(36)}`
-
-    // Generate mock wallets for this tab
     const wallets = generateMockWallets(type === "bundle" ? 24 : 50)
 
-    console.log("Creating new tab:", tabId)
-
-    // Add the tab - using a callback to ensure we have the latest state
-    setActiveTabs((currentTabs) => {
-      const newTabs = [...currentTabs, tabId]
-      console.log("Updated active tabs:", newTabs)
-      return newTabs
-    })
-
-    // Set the tab wallets
-    setTabWallets((prev) => {
-      const newWallets = {
-        ...prev,
-        [tabId]: wallets,
-      }
-      return newWallets
-    })
-
-    // Set the tab running state
-    setTabRunningState((prev) => {
-      const newRunningState = {
-        ...prev,
-        [tabId]: false,
-      }
-      return newRunningState
-    })
-
-    // Select the new tab
+    setActiveTabs((currentTabs) => [...currentTabs, tabId])
+    setTabWallets((prev) => ({ ...prev, [tabId]: wallets }))
+    setTabRunningState((prev) => ({ ...prev, [tabId]: false }))
     setSelectedTab(tabId)
 
-    // Create a task for this tab (for compatibility with existing code)
-    const typeLabels = {
-      meta: "Metadata",
-      bundle: "Bundle",
-      volume: "Volume",
-      trade: "Trade",
-    }
-
-    const newTask: Task = {
-      id: tabId,
-      title: `${typeLabels[type]} Task for ${tokenData.symbol}`,
-      type,
-      isRunning: false,
-      logs: [],
-      completed: false,
-    }
-
-    // Add the new task to the current tasks
-    const updatedTasks = [...currentTasks, newTask]
-    setCurrentTasks(updatedTasks)
-
-    // Update the token tasks map - use token ID as the key
-    setTokenTasks((prev) => ({
-      ...prev,
-      [selectedToken.id]: updatedTasks,
-    }))
-
-    // Add a log for tab creation
-    addGlobalLog(tabId, type, `${typeLabels[type]} Bot created for ${tokenData.symbol}`)
+    const typeLabels = { meta: "Metadata", bundle: "Bundle", volume: "Volume", trade: "Trade" }
 
     toast({
       title: "Bot Created",
@@ -894,129 +393,39 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     })
   }
 
-  // Add this function inside the TokenManagementWidget component
-  const handleSelectWallet = (tabId: string, walletId: number, selected: boolean) => {
-    setSelectedWallets((prev) => {
-      const currentSelected = prev[tabId] || []
+  // Handle bundle wizard save with SDK integration
+  const handleSaveBundleData = async (bundleData: any) => {
+    if (!tokenData) return
 
-      if (selected) {
-        return {
-          ...prev,
-          [tabId]: [...currentSelected, walletId],
-        }
-      } else {
-        return {
-          ...prev,
-          [tabId]: currentSelected.filter((id) => id !== walletId),
-        }
+    try {
+      // Create bundle using SDK
+      const bundleConfig = {
+        tokenAddress: tokenData.address || generateRandomAddress(),
+        tokenSymbol: tokenData.symbol,
+        tokenName: tokenData.name,
+        platform: bundleData.platform,
+        mode: bundleData.mode,
+        walletsCount: bundleData.wallets.length,
+        devWalletBuyAmount: bundleData.devWalletBuyAmount || 5,
+        wallets: bundleData.wallets.map((wallet: any, index: number) => ({
+          id: index + 1,
+          address: wallet.address,
+          privateKey: `pk_${Math.random().toString(36)}`, // Mock private key
+          tokenAddress: tokenData.address || generateRandomAddress(),
+          tradeAmount: wallet.amount,
+          solAmount: wallet.amount,
+          tokenAmount: 0,
+        })),
+        tokenTax: bundleData.tokenTax,
+        revokeFreeze: bundleData.revokeFreeze,
+        revokeMint: bundleData.revokeMint,
       }
-    })
-  }
 
-  // Add this function inside the TokenManagementWidget component
-  const handleOpenSellDialog = (tabId: string) => {
-    setCurrentSellTabId(tabId)
-    setIsSellDialogOpen(true)
-  }
+      const bundle = await createBundle(bundleConfig)
 
-  // Add this function inside the TokenManagementWidget component
-  const handleSellTokens = (percentage: number) => {
-    if (!currentSellTabId) return
-
-    const tabWalletsData = tabWallets[currentSellTabId] || []
-    const selectedWalletIds = selectedWallets[currentSellTabId] || []
-
-    if (selectedWalletIds.length === 0) {
-      toast({
-        title: "No Wallets Selected",
-        description: "Please select at least one wallet to sell tokens from",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Calculate total tokens before sale for logging
-    const totalTokensBefore = tabWalletsData
-      .filter((wallet) => selectedWalletIds.includes(wallet.id))
-      .reduce((sum, wallet) => sum + wallet.tokenBalance, 0)
-
-    // Update the wallet token balances
-    setTabWallets((prev) => {
-      const updatedWallets = [...prev[currentSellTabId]].map((wallet) => {
-        if (selectedWalletIds.includes(wallet.id)) {
-          const tokensToSell = Math.floor(wallet.tokenBalance * (percentage / 100))
-          const solReceived = tokensToSell * 0.0000025 // Mock conversion rate
-
-          return {
-            ...wallet,
-            tokenBalance: wallet.tokenBalance - tokensToSell,
-            solBalance: wallet.solBalance + solReceived,
-          }
-        }
-        return wallet
-      })
-
-      return {
-        ...prev,
-        [currentSellTabId]: updatedWallets,
-      }
-    })
-
-    // Calculate tokens sold for logging
-    const tokensSold = Math.floor(totalTokensBefore * (percentage / 100))
-
-    // Add log entry
-    addGlobalLog(
-      currentSellTabId,
-      getTabType(currentSellTabId),
-      `Sold ${tokensSold.toLocaleString()} tokens (${percentage}%) from ${selectedWalletIds.length} wallets`,
-    )
-
-    // Close dialog
-    setIsSellDialogOpen(false)
-
-    // Show success toast
-    toast({
-      title: "Tokens Sold",
-      description: `Successfully sold ${percentage}% of tokens from ${selectedWalletIds.length} wallets`,
-    })
-  }
-
-  // Calculate total tokens for the current sell tab
-  const getTotalTokensForCurrentSellTab = () => {
-    if (!currentSellTabId) return 0
-
-    const tabWalletsData = tabWallets[currentSellTabId] || []
-    const selectedWalletIds = selectedWallets[currentSellTabId] || []
-
-    return tabWalletsData
-      .filter((wallet) => selectedWalletIds.includes(wallet.id))
-      .reduce((sum, wallet) => sum + wallet.tokenBalance, 0)
-  }
-
-  // Add this after the existing createTab function
-  const handleOpenBundleWizard = () => {
-    setIsBundleWizardOpen(true)
-  }
-
-  // Update the handleSaveBundleData function to update token data and wallet balances
-
-  // Find the handleSaveBundleData function and replace it with this updated version:
-  const handleSaveBundleData = (bundleData: any) => {
-    console.log("Bundle data saved:", bundleData)
-    console.log("tokenData data is:", tokenData)
-
-    // Update the current token to show it has a bundle
-    if (tokenData) {
-      toast({
-        title: "Bundle Created",
-        description: `Bundle created for ${tokenData.symbol} with ${bundleData.wallets.length} wallets`,
-      })
-
-      // Create a bundle tab
+      // Create bundle tab
       const bundleTabId = `bundle-${Date.now().toString(36)}`
 
-      // Store the bundling mode, platform and token settings for this tab
       setTabBundleModes((prev) => ({
         ...prev,
         [bundleTabId]: {
@@ -1028,226 +437,59 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
         },
       }))
 
-      // Add the tab
       setActiveTabs((currentTabs) => [...currentTabs, bundleTabId])
 
-      // Generate mock token balances for wallets
-      const walletsWithTokens = bundleData.wallets.map((wallet: any, index: number) => {
-        const tokenBalance = Math.floor(Math.random() * 1000000) + 100000 // Random token balance
-        return {
-          id: index + 1,
-          address: wallet.address,
-          solBalance: Math.max(0, wallet.amount - Math.random() * 0.1), // Slightly less SOL after bundle
-          tokenBalance: tokenBalance, // Add token balance
-          tradeAmount: wallet.amount,
-        }
-      })
-
-      // Set the tab wallets with token balances
-      setTabWallets((prev) => ({
-        ...prev,
-        [bundleTabId]: walletsWithTokens,
+      // Convert SDK wallets to component wallets
+      const walletsWithTokens = bundleData.wallets.map((wallet: any, index: number) => ({
+        id: index + 1,
+        address: wallet.address,
+        solBalance: wallet.amount,
+        tokenBalance: 0, // Will be updated after launch
+        tradeAmount: wallet.amount,
       }))
 
-      // Set the tab running state
-      setTabRunningState((prev) => ({
-        ...prev,
-        [bundleTabId]: false,
-      }))
-
-      // Select the new tab
+      setTabWallets((prev) => ({ ...prev, [bundleTabId]: walletsWithTokens }))
+      setTabRunningState((prev) => ({ ...prev, [bundleTabId]: false }))
       setSelectedTab(bundleTabId)
 
-      // Create a task for this tab
-      const newTask: Task = {
-        id: bundleTabId,
-        title: `Bundle Task for ${tokenData.symbol}`,
-        type: "bundle",
-        isRunning: false,
-        logs: [],
-        completed: true, // Mark as completed immediately
-      }
+      // Launch the bundle automatically
+      await launchBundle(bundle.id!)
 
-      // Add the new task to the current tasks
-      const updatedTasks = [...currentTasks, newTask]
-      setCurrentTasks(updatedTasks)
-
-      // Update the token tasks map
-      setTokenTasks((prev) => ({
-        ...prev,
-        [selectedToken.id]: updatedTasks,
-      }))
-
-      // Generate mock market data for the token
-      const mockMarketCap = Math.floor(Math.random() * 5000000) + 1000000
-      const mockUsdMarketCap = mockMarketCap * 0.8
-      const mockPrice = (mockUsdMarketCap / 1000000000).toFixed(8)
-
-      // Update token data with market information
-      setTokenData((prev) => {
-        if (!prev) return null
-        return {
-          ...prev,
-          marketCap: mockMarketCap,
-          usdMarketCap: mockUsdMarketCap,
-          price: mockPrice,
-          launchedDate: new Date().toLocaleString(),
-          lastUpdated: new Date().toLocaleTimeString(),
-        }
+      toast({
+        title: "Bundle Created & Launched",
+        description: `Bundle created for ${tokenData.symbol} with ${bundleData.wallets.length} wallets`,
       })
-
-      // Add a log for tab creation with platform information and token settings
-      let logMessage = `Bundle created for ${tokenData.symbol} on ${getPlatformLabel(bundleData.platform)} with mode: ${getBundleModeLabel(bundleData.mode)}`
-
-      // Add token settings to log if applicable
-      if (bundleData.platform !== "pump-fun" && bundleData.platform !== "moonshot") {
-        logMessage += `, Tax: ${bundleData.tokenTax}%`
-      }
-
-      if (bundleData.revokeFreeze || bundleData.revokeMint) {
-        logMessage += `, Authorities: ${bundleData.revokeFreeze ? "Freeze " : ""}${bundleData.revokeMint ? "Mint" : ""} revoked`
-      }
-
-      addGlobalLog(bundleTabId, "bundle", logMessage)
-
-      // Add logs about token creation and market data
-      addGlobalLog(
-        bundleTabId,
-        "bundle",
-        `Token ${tokenData.symbol} created successfully with initial market cap of ${(mockMarketCap / 1000000).toFixed(2)}M`,
-      )
-      addGlobalLog(bundleTabId, "bundle", `Initial price: ${mockPrice} USD`)
-
-      // Start periodic market updates
-      startMarketUpdates(bundleTabId)
-    }
-  }
-
-  // Add this new function after handleSaveBundleData
-  const startMarketUpdates = (bundleTabId: string) => {
-    // Initial update
-    updateMarketData()
-
-    // Set interval for periodic updates
-    const intervalId = setInterval(() => {
-      if (!document.hidden) {
-        // Only update when tab is visible
-        updateMarketData()
-        updateWalletBalances(bundleTabId)
-      }
-    }, 5000) // Update every 5 seconds
-
-    // Store interval ID for cleanup
-    const key = `market-updates-${bundleTabId}`
-
-    // Clean up previous interval if it exists
-    if (window[key as any]) {
-      clearInterval(window[key as any])
-    }
-
-    // Store new interval ID
-    window[key as any] = intervalId
-  }
-
-  // Add this new function after startMarketUpdates
-  const updateMarketData = () => {
-    if (!tokenData) return
-
-    // Get current market cap
-    const currentMarketCap = tokenData.marketCap || 1000000
-
-    // Generate random change (-5% to +8%)
-    const changePercent = Math.random() * 13 - 5
-    const changeAmount = currentMarketCap * (changePercent / 100)
-
-    // Calculate new market cap
-    const newMarketCap = Math.max(500000, currentMarketCap + changeAmount)
-    const newUsdMarketCap = newMarketCap * 0.8
-    const newPrice = (newUsdMarketCap / 1000000000).toFixed(8)
-
-    // Update token data
-    setTokenData((prev) => {
-      if (!prev) return null
-      return {
-        ...prev,
-        marketCap: newMarketCap,
-        usdMarketCap: newUsdMarketCap,
-        price: newPrice,
-        priceChange: changePercent,
-        lastUpdated: new Date().toLocaleTimeString(),
-      }
-    })
-
-    // Add log if change is significant
-    if (Math.abs(changePercent) > 3) {
-      const direction = changePercent > 0 ? "up" : "down"
-      addGlobalLog(
-        "system",
-        "system",
-        `Market update: ${tokenData.symbol} price moved ${direction} by ${Math.abs(changePercent).toFixed(2)}% to ${newPrice} USD`,
-      )
-    }
-  }
-
-  // Add this new function after updateMarketData
-  const updateWalletBalances = (tabId: string) => {
-    if (!tabWallets[tabId]) return
-
-    setTabWallets((prev) => {
-      const wallets = [...prev[tabId]]
-
-      // Update each wallet's token balance
-      const updatedWallets = wallets.map((wallet) => {
-        // Random change between -2% and +5%
-        const changePercent = Math.random() * 7 - 2
-        const newBalance = Math.floor(wallet.tokenBalance * (1 + changePercent / 100))
-
-        return {
-          ...wallet,
-          tokenBalance: newBalance,
-        }
+    } catch (error) {
+      console.error("Failed to create bundle:", error)
+      toast({
+        title: "Bundle Creation Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
       })
-
-      return {
-        ...prev,
-        [tabId]: updatedWallets,
-      }
-    })
+    }
   }
 
-  // Handle starting a tab's task
-  const handleStartTab = (tabId: string) => {
-    // Get the task type from the tab ID
+  // Handle starting volume boost
+  const handleStartTab = async (tabId: string) => {
     const taskType = getTabType(tabId)
 
-    // Update running state
-    setTabRunningState((prev) => ({
-      ...prev,
-      [tabId]: true,
-    }))
-
-    // Update any task running state
+    setTabRunningState((prev) => ({ ...prev, [tabId]: true }))
     setIsAnyTaskRunning(true)
 
-    // Add a log for starting the task
-    addGlobalLog(tabId, taskType, `Started ${getTabTitle(tabId)} task`)
-
-    // Generate some mock logs for the task
-    setTimeout(() => {
-      if (taskType === "bundle") {
-        addGlobalLog(tabId, taskType, "Initializing bundle configuration...")
-        setTimeout(() => addGlobalLog(tabId, taskType, "Setting up wallet connections..."), 1000)
-        setTimeout(() => addGlobalLog(tabId, taskType, "Preparing bundle parameters..."), 2000)
-      } else if (taskType === "volume") {
-        addGlobalLog(tabId, taskType, "Starting volume bot...")
-        setTimeout(() => addGlobalLog(tabId, taskType, "Connecting to liquidity pools..."), 1000)
-        setTimeout(() => addGlobalLog(tabId, taskType, "Monitoring trading volume..."), 2000)
-      } else if (taskType === "trade") {
-        addGlobalLog(tabId, taskType, "Initializing trading module...")
-        setTimeout(() => addGlobalLog(tabId, taskType, "Analyzing market conditions..."), 1000)
-        setTimeout(() => addGlobalLog(tabId, taskType, "Setting up trading parameters..."), 2000)
+    if (taskType === "volume" && tokenData?.address) {
+      try {
+        const walletIds = tabWallets[tabId]?.map((w) => w.id) || []
+        await startVolumeBoost({
+          tokenAddress: tokenData.address,
+          walletIds,
+          volumeTarget: 10000,
+          duration: 3600000, // 1 hour
+          intervalMs: 5000,
+        })
+      } catch (error) {
+        console.error("Failed to start volume boost:", error)
       }
-    }, 500)
+    }
 
     toast({
       title: "Task Started",
@@ -1255,26 +497,25 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     })
   }
 
-  // Handle stopping a tab's task
-  const handleStopTab = (tabId: string) => {
-    // Get the task type from the tab ID
+  // Handle stopping volume boost
+  const handleStopTab = async (tabId: string) => {
     const taskType = getTabType(tabId)
 
-    // Update running state
-    setTabRunningState((prev) => ({
-      ...prev,
-      [tabId]: false,
-    }))
+    setTabRunningState((prev) => ({ ...prev, [tabId]: false }))
 
-    // Check if any tasks are still running
     const anyRunning = Object.entries(tabRunningState)
-      .filter(([id]) => id !== tabId) // Exclude the current tab
+      .filter(([id]) => id !== tabId)
       .some(([, running]) => running)
 
     setIsAnyTaskRunning(anyRunning)
 
-    // Add a log for stopping the task
-    addGlobalLog(tabId, taskType, `Stopped ${getTabTitle(tabId)} task`)
+    if (taskType === "volume" && tokenData?.address) {
+      try {
+        await stopVolumeBoost(tokenData.address)
+      } catch (error) {
+        console.error("Failed to stop volume boost:", error)
+      }
+    }
 
     toast({
       title: "Task Stopped",
@@ -1282,42 +523,100 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     })
   }
 
-  // Determine if Meta button should be disabled
-  const isMetaDisabled = () => {
-    return hasMetaTask() || hasTokenAddress()
+  // Handle selling tokens with SDK
+  const handleSellTokens = async (percentage: number) => {
+    if (!currentSellTabId || !tokenData?.address) return
+
+    const selectedWalletIds = selectedWallets[currentSellTabId] || []
+
+    if (selectedWalletIds.length === 0) {
+      toast({
+        title: "No Wallets Selected",
+        description: "Please select at least one wallet to sell tokens from",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await sellTokens({
+        tokenAddress: tokenData.address,
+        walletIds: selectedWalletIds,
+        percentage,
+        slippage: 5,
+      })
+
+      setIsSellDialogOpen(false)
+
+      toast({
+        title: "Tokens Sold",
+        description: `Successfully sold ${percentage}% of tokens from ${selectedWalletIds.length} wallets`,
+      })
+    } catch (error) {
+      console.error("Failed to sell tokens:", error)
+      toast({
+        title: "Sell Failed",
+        description: error instanceof Error ? error.message : "Unknown error occurred",
+        variant: "destructive",
+      })
+    }
   }
 
-  // Update the isBundleDisabled function to check for Meta completion
-  const isBundleDisabled = () => {
-    // If a bundle tab already exists, disable the button
-    const bundleExists = activeTabs.some((tab) => tab.startsWith("bundle"))
+  // Rest of the helper functions remain the same...
+  const handleSelectWallet = (tabId: string, walletId: number, selected: boolean) => {
+    setSelectedWallets((prev) => {
+      const currentSelected = prev[tabId] || []
+      if (selected) {
+        return { ...prev, [tabId]: [...currentSelected, walletId] }
+      } else {
+        return { ...prev, [tabId]: currentSelected.filter((id) => id !== walletId) }
+      }
+    })
+  }
 
-    // If the token doesn't have an address, enable the button regardless of Meta completion
+  const handleOpenSellDialog = (tabId: string) => {
+    setCurrentSellTabId(tabId)
+    setIsSellDialogOpen(true)
+  }
+
+  const getTotalTokensForCurrentSellTab = () => {
+    if (!currentSellTabId) return 0
+    const tabWalletsData = tabWallets[currentSellTabId] || []
+    const selectedWalletIds = selectedWallets[currentSellTabId] || []
+    return tabWalletsData
+      .filter((wallet) => selectedWalletIds.includes(wallet.id))
+      .reduce((sum, wallet) => sum + wallet.tokenBalance, 0)
+  }
+
+  const handleOpenBundleWizard = () => {
+    setIsBundleWizardOpen(true)
+  }
+
+  const isMetaDisabled = () => {
+    return hasTokenAddress()
+  }
+
+  const isBundleDisabled = () => {
+    const bundleExists = activeTabs.some((tab) => tab.startsWith("bundle"))
     if (!hasTokenAddress()) {
       return bundleExists
     }
-
-    // If the token has an address, require Meta completion
     return bundleExists || !isMetaCompleted
   }
 
-  // Generate mock launch date for demo purposes
   const getLaunchDate = () => {
-    if (pumpFunData?.created_timestamp) {
-      return new Date(pumpFunData.created_timestamp).toLocaleString()
+    if (currentBundle?.createdAt) {
+      return new Date(currentBundle.createdAt).toLocaleString()
     }
-
     const date = new Date()
     date.setDate(date.getDate() - Math.floor(Math.random() * 30))
     return date.toLocaleDateString() + " " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
   }
 
-  // Get tab type from tab ID
   const getTabType = (tabId: string) => {
     return tabId.split("-")[0]
   }
 
-  // Add a helper function to get a readable platform label
   const getPlatformLabel = (platformId: string) => {
     switch (platformId) {
       case "raydium-amm":
@@ -1339,7 +638,6 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     }
   }
 
-  // Add a helper function to get a readable bundle mode label
   const getBundleModeLabel = (mode: string) => {
     switch (mode) {
       case "justLaunch":
@@ -1355,7 +653,6 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     }
   }
 
-  // Update the getTabTitle function to include token settings information when relevant
   const getTabTitle = (tabId: string) => {
     const type = getTabType(tabId)
 
@@ -1363,18 +660,14 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
       return "Activity Logs"
     }
 
-    // For Volume and Trade, add the counter number
     if (type === "volume" || type === "trade") {
-      // Find the index of this tab among tabs of the same type
       const sameTypeTabs = activeTabs.filter((tab) => tab.startsWith(type))
       const index = sameTypeTabs.indexOf(tabId)
-
       if (index !== -1) {
         return type === "volume" ? `Volume Bot #${index + 1}` : `Trade Bot #${index + 1}`
       }
     }
 
-    // For bundle tabs, include the mode and platform
     if (type === "bundle") {
       const bundleInfo = tabBundleModes[tabId]
       if (bundleInfo) {
@@ -1395,9 +688,8 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     }
   }
 
-  // Check if Bundle task is completed
   const hasBundleCompleted = () => {
-    return currentTasks.some((task) => task.type === "bundle" && task.completed)
+    return currentBundle?.status === "launched"
   }
 
   // Handle clicking the logger icon
@@ -1465,14 +757,13 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
                   launchedDate: getLaunchDate(),
                   devAddress: tokenData.devAddress || "",
                   image: tokenData.image,
-                  marketCap: pumpFunData?.market_cap || tokenData.marketCap,
-                  priceChange: dexScreenerData?.priceChange || pumpFunData?.priceChange24h || tokenData.priceChange,
-                  price: dexScreenerData?.priceUsd,
-                  usdMarketCap: pumpFunData?.usd_market_cap,
-                  isLoading: isLoadingTokenData || isDexScreenerLoading,
-                  isPumpSwapMigrated: pumpFunData?.pump_swap_pool !== null,
-                  lastUpdated: dexScreenerData?.lastUpdated || new Date().toLocaleTimeString(),
-                  // Add platform information if available
+                  marketCap: tokenPrice?.marketCap || tokenData.marketCap,
+                  priceChange: tokenPrice?.priceChange24h || tokenData.priceChange,
+                  price: tokenPrice?.price,
+                  usdMarketCap: tokenPrice?.marketCap,
+                  isLoading: isLoadingTokenData,
+                  isPumpSwapMigrated: false,
+                  lastUpdated: tokenData.lastUpdated || new Date().toLocaleTimeString(),
                   platform:
                     selectedTab && selectedTab.startsWith("bundle")
                       ? getPlatformLabel(tabBundleModes[selectedTab]?.platform)
@@ -1597,7 +888,7 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
             {/* Activity Logs Container */}
             <div className="rounded-lg bg-[#11111D] overflow-hidden shadow-sm border border-gray-800 m-2 flex-1 flex flex-col">
               <div className="flex-1 h-[calc(100vh-120px)] p-2">
-                <ActivityLogs logs={allLogs} />
+                <ActivityLogs tokenAddress={tokenData.address} />
               </div>
             </div>
           </>

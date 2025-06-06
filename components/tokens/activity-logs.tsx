@@ -28,10 +28,17 @@ export function ActivityLogs({ tokenAddress }: ActivityLogsProps) {
     }
   }, [logs])
 
-  // Filter logs based on selected filter
+  // Filter logs based on selected filter and token address
   const filteredLogs = logs.filter((log) => {
-    if (filter === "all") return true
-    return log.category === filter
+    // Filter by category
+    if (filter !== "all" && log.category !== filter) return false
+
+    // Filter by token address if provided
+    if (tokenAddress && log.data?.tokenAddress && log.data.tokenAddress !== tokenAddress) {
+      return false
+    }
+
+    return true
   })
 
   // Get category label
