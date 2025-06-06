@@ -30,6 +30,20 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
   const [marketCap, setMarketCap] = useState<number>(0)
   const [change, setChange] = useState<number>(0)
   const [lastUpdate, setLastUpdate] = useState<string>("")
+  const [displayCurrency, setDisplayCurrency] = useState<"sol" | "usd">("sol")
+
+  // Add PNL calculation after market cap initialization
+  const [pnlData, setPnlData] = useState<{
+    initialInvestment: number
+    currentValue: number
+    profitLoss: number
+    profitLossPercentage: number
+  }>({
+    initialInvestment: 0,
+    currentValue: 0,
+    profitLoss: 0,
+    profitLossPercentage: 0,
+  })
 
   // Use a ref to track the current market cap without causing re-renders
   const marketCapRef = useRef<number>(0)
@@ -40,6 +54,19 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
     if (tokenData?.marketCap) {
       setMarketCap(tokenData.marketCap)
       marketCapRef.current = tokenData.marketCap
+
+      // Calculate mock PNL data
+      const initialInvestment = 10 // Mock initial investment of 10 SOL
+      const currentValue = initialInvestment * (1 + (tokenData.priceChange || 0) / 100)
+      const profitLoss = currentValue - initialInvestment
+      const profitLossPercentage = ((currentValue - initialInvestment) / initialInvestment) * 100
+
+      setPnlData({
+        initialInvestment,
+        currentValue,
+        profitLoss,
+        profitLossPercentage,
+      })
 
       // If we have real price change data, use it
       if (tokenData.priceChange !== undefined) {
@@ -156,6 +183,32 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
           </div>
         </div>
 
+        {/* Add this section after the token details and before the divider */}
+        {(hasAddress || hasBundleCompleted) && (
+          <div className="flex justify-end mt-2">
+            <div className="flex items-center space-x-2 bg-[#1A1A1A] rounded-md p-1">
+              <button
+                onClick={() => setDisplayCurrency("sol")}
+                className={cn(
+                  "px-2 py-1 text-xs rounded transition-colors",
+                  displayCurrency === "sol" ? "bg-amber-600 text-white" : "text-gray-400 hover:text-gray-300",
+                )}
+              >
+                SOL
+              </button>
+              <button
+                onClick={() => setDisplayCurrency("usd")}
+                className={cn(
+                  "px-2 py-1 text-xs rounded transition-colors",
+                  displayCurrency === "usd" ? "bg-amber-600 text-white" : "text-gray-400 hover:text-gray-300",
+                )}
+              >
+                USD
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Divider - only show if we have market data to display */}
         {(hasAddress || hasBundleCompleted) && <div className="h-px bg-gray-800 my-3"></div>}
 
@@ -172,28 +225,40 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
                 <div className="flex flex-col">
                   <div className="flex items-center">
                     <DollarSign className="h-3.5 w-3.5 mr-1 text-[#0FAE96]" />
-                    <p className="text-sm font-medium text-[#ECF1F0]">{formattedMarketCap}</p>
+                    <p className="text-sm font-medium text-[#ECF1F0]">
+                      {displayCurrency === "sol" ? `${(marketCap / 103).toFixed(0)} SOL` : formattedMarketCap}
+                    </p>
                   </div>
-                  {formattedUsdMarketCap && <p className="text-xs text-gray-400 mt-0.5">{formattedUsdMarketCap} USD</p>}
+                  {displayCurrency === "usd" && formattedUsdMarketCap && (
+                    <p className="text-xs text-gray-400 mt-0.5">{formattedUsdMarketCap} USD</p>
+                  )}
                 </div>
               )}
             </div>
             <div className="space-y-1">
-              <p className="text-xs text-gray-400">Change (24h)</p>
+              <p className="text-xs text-gray-400">PNL</p>
               {isLoading ? (
                 <div className="flex items-center h-5">
                   <div className="animate-pulse h-3 w-16 bg-gray-700 rounded"></div>
                 </div>
               ) : (
-                <div className="flex items-center">
-                  {change >= 0 ? (
-                    <ArrowUp className="h-3.5 w-3.5 mr-1 text-green-500" />
-                  ) : (
-                    <ArrowDown className="h-3.5 w-3.5 mr-1 text-red-500" />
-                  )}
-                  <p className={cn("text-sm font-medium", change >= 0 ? "text-green-500" : "text-red-500")}>
-                    {change >= 0 ? "+" : ""}
-                    {typeof change === "number" ? change.toFixed(2) : "0.00"}%
+                <div className="flex flex-col">
+                  <div className="flex items-center">
+                    {pnlData.profitLoss >= 0 ? (
+                      <ArrowUp className="h-3.5 w-3.5 mr-1 text-green-500" />
+                    ) : (
+                      <ArrowDown className="h-3.5 w-3.5 mr-1 text-red-500" />
+                    )}
+                    <p
+                      className={cn("text-sm font-medium", pnlData.profitLoss >= 0 ? "text-green-500" : "text-red-500")}
+                    >
+                      {pnlData.profitLoss >= 0 ? "+" : ""}
+                      {pnlData.profitLoss.toFixed(3)} SOL
+                    </p>
+                  </div>
+                  <p className={cn("text-xs", pnlData.profitLossPercentage >= 0 ? "text-green-400" : "text-red-400")}>
+                    {pnlData.profitLossPercentage >= 0 ? "+" : ""}
+                    {pnlData.profitLossPercentage.toFixed(2)}%
                   </p>
                 </div>
               )}
