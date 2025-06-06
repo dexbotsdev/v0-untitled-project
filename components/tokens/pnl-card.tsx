@@ -1,8 +1,10 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { ArrowUp, ArrowDown, DollarSign, Calendar, User, Clock, AlertCircle } from "lucide-react"
+import { ArrowUp, ArrowDown, DollarSign, Calendar, Clock, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 
 interface PnlCardProps {
   isTaskRunning: boolean
@@ -132,6 +134,32 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
   return (
     <div className="rounded-lg overflow-hidden shadow-sm border border-gray-800 bg-[#11111D] mb-1">
       <div className="p-3">
+        {/* SOL/USD Switch at the top */}
+        {(hasAddress || hasBundleCompleted) && (
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="currency-switch" className="text-xs text-gray-400">
+                Display Currency
+              </Label>
+              <div className="flex items-center space-x-2">
+                <span className={cn("text-xs", displayCurrency === "sol" ? "text-amber-400" : "text-gray-500")}>
+                  SOL
+                </span>
+                <Switch
+                  id="currency-switch"
+                  checked={displayCurrency === "usd"}
+                  onCheckedChange={(checked) => setDisplayCurrency(checked ? "usd" : "sol")}
+                  className="data-[state=checked]:bg-amber-600"
+                />
+                <span className={cn("text-xs", displayCurrency === "usd" ? "text-amber-400" : "text-gray-500")}>
+                  USD
+                </span>
+              </div>
+            </div>
+            {tokenData?.isPumpSwapMigrated && <span className="text-xs text-green-400">[Migrated to PumpSwap]</span>}
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
           {/* Token Icon */}
           <div className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
@@ -144,22 +172,8 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
             )}
           </div>
 
-          {/* Token Details */}
+          {/* Token Details - Only show launched date and platform */}
           <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-1">
-            <div>
-              <p className="text-xs text-gray-400">Token Name</p>
-              <p className="text-sm font-medium text-[#ECF1F0] truncate">
-                {tokenName}
-                {tokenData?.isPumpSwapMigrated && (
-                  <span className="ml-1 text-xs text-green-400">[Migrated to PumpSwap]</span>
-                )}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-400">Symbol</p>
-              <p className="text-sm font-medium text-[#ECF1F0]">{symbol}</p>
-            </div>
-
             {/* Only show launched date for tokens with address */}
             {hasAddress ? (
               <div>
@@ -175,50 +189,15 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
               </div>
             )}
 
-            <div>
-              <p className="text-xs text-gray-400 flex items-center">
-                <User className="h-3 w-3 mr-1" /> Dev
-              </p>
-              <p className="text-xs text-amber-400 truncate">
-                {hasAddress ? abbreviateAddress(devAddress) : "Not assigned yet"}
-              </p>
-            </div>
-
             {/* Display platform if available */}
             {tokenData?.platform && (
-              <div className="sm:col-span-2">
+              <div>
                 <p className="text-xs text-gray-400">Platform</p>
                 <p className="text-xs text-green-400">{tokenData.platform}</p>
               </div>
             )}
           </div>
         </div>
-
-        {/* Add this section after the token details and before the divider */}
-        {(hasAddress || hasBundleCompleted) && (
-          <div className="flex justify-end mt-2">
-            <div className="flex items-center space-x-2 bg-[#1A1A1A] rounded-md p-1">
-              <button
-                onClick={() => setDisplayCurrency("sol")}
-                className={cn(
-                  "px-2 py-1 text-xs rounded transition-colors",
-                  displayCurrency === "sol" ? "bg-amber-600 text-white" : "text-gray-400 hover:text-gray-300",
-                )}
-              >
-                SOL
-              </button>
-              <button
-                onClick={() => setDisplayCurrency("usd")}
-                className={cn(
-                  "px-2 py-1 text-xs rounded transition-colors",
-                  displayCurrency === "usd" ? "bg-amber-600 text-white" : "text-gray-400 hover:text-gray-300",
-                )}
-              >
-                USD
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Divider - only show if we have market data to display */}
         {(hasAddress || hasBundleCompleted) && <div className="h-px bg-gray-800 my-3"></div>}
@@ -264,7 +243,9 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
                       className={cn("text-sm font-medium", pnlData.profitLoss >= 0 ? "text-green-500" : "text-red-500")}
                     >
                       {pnlData.profitLoss >= 0 ? "+" : ""}
-                      {pnlData.profitLoss.toFixed(3)} SOL
+                      {displayCurrency === "sol"
+                        ? `${pnlData.profitLoss.toFixed(3)} SOL`
+                        : `$${(pnlData.profitLoss * 103).toFixed(2)}`}
                     </p>
                   </div>
                   <p className={cn("text-xs", pnlData.profitLossPercentage >= 0 ? "text-green-400" : "text-red-400")}>
@@ -283,7 +264,11 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
                 </div>
               </div>
               <div className="flex flex-col">
-                <p className="text-xs text-amber-400 truncate">{tokenData?.price || "N/A"}</p>
+                <p className="text-xs text-amber-400 truncate">
+                  {displayCurrency === "sol"
+                    ? `${((tokenData?.price || 0) / 103).toFixed(8)} SOL`
+                    : `$${tokenData?.price || "N/A"}`}
+                </p>
                 {tokenData?.priceChange !== undefined && (
                   <p className={cn("text-xs", tokenData.priceChange >= 0 ? "text-green-400" : "text-red-400")}>
                     {tokenData.priceChange >= 0 ? "+" : ""}
