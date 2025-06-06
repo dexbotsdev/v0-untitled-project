@@ -1,17 +1,9 @@
-import { Sequelize } from "sequelize"
-import { TokenModel } from "./token"
-import { BundlerConfigModel } from "./bundlerConfig"
+// This is a placeholder file to maintain compatibility with existing imports
+// We're moving away from Sequelize to use our bundlerSDK instead
 
-const sequelize = new Sequelize({
-  dialect: "sqlite",
-  storage: "./database.sqlite",
-})
-
-const Token = TokenModel(sequelize)
-const BundlerConfig = BundlerConfigModel(sequelize)
-
-// Define associations
-Token.hasOne(BundlerConfig, { foreignKey: "tokenAddress", sourceKey: "address" })
-BundlerConfig.belongsTo(Token, { foreignKey: "tokenAddress", targetKey: "address" })
-
-export { sequelize, Token, BundlerConfig }
+export const sequelize = {
+  query: async () => {
+    console.warn("Sequelize is deprecated. Please use bundlerSDK instead.")
+    return [[], 0]
+  },
+}

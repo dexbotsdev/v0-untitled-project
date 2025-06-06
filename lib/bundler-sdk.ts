@@ -1,42 +1,24 @@
-import { EventEmitter } from "events"
+import EventEmitter from "events"
+import { v4 as uuidv4 } from "uuid"
 
-// Types for the SDK
-export interface BundleConfig {
-  id?: string
-  tokenAddress: string
-  tokenSymbol: string
-  tokenName: string
-  platform: string
-  mode: string
-  walletsCount: number
-  devWalletBuyAmount: number
-  delaySeconds?: number
-  minDelay?: number
-  maxDelay?: number
-  walletBuyAmounts?: number[]
-  wallets?: WalletConfig[]
-  status?: "pending" | "launching" | "launched" | "failed"
-  createdAt?: string
-  updatedAt?: string
-  tokenTax?: number
-  revokeFreeze?: boolean
-  revokeMint?: boolean
-}
+// Types
+export type LogType = "info" | "success" | "warning" | "error"
+export type LogCategory = "bundle" | "wallet" | "token" | "volume" | "system"
 
-export interface WalletConfig {
-  id: number
-  address: string
-  privateKey: string
-  tokenAddress: string
-  tradeAmount: number
-  buyPrice?: number
-  tokenAmount?: number
-  solAmount?: number
-  tokenSupply?: number
+export interface ActivityLog {
+  id: string
+  message: string
+  timestamp: Date
+  type: LogType
+  category: LogCategory
+  tokenAddress?: string
+  walletAddress?: string
+  details?: any
 }
 
 export interface Token {
-  id: string
+  id?: string
+  token_id?: string
   name: string
   symbol: string
   address: string
@@ -47,508 +29,574 @@ export interface Token {
   website?: string
   image?: string
   price?: number
+  priceChangePercent?: number
   marketCap?: number
-  volume24h?: number
-  priceChange24h?: number
-  bundleReady?: boolean
-  bundleStatus?: string
-  devAddress?: string
-  launchedDate?: string
-  isPumpSwapMigrated?: boolean
+  volume?: number
+  bundle_mode?: string
+  walletsCount?: number
+  devWalletBuyAmount?: number
+  delaySeconds?: number
+  minDelay?: number
+  maxDelay?: number
+  createdAt?: Date
+  launchedAt?: Date
 }
 
-export interface WalletBalance {
-  walletId: number
-  address: string
-  solBalance: number
-  tokenBalance: number
-  tokenAddress?: string
-}
-
-export interface ActivityLog {
+export interface Wallet {
   id: string
-  timestamp: string
-  message: string
-  type: "info" | "success" | "warning" | "error"
-  category: "bundle" | "wallet" | "token" | "volume" | "system"
-  data?: any
+  address: string
+  privateKey: string
+  balance: number
+  tokenBalances: Record<string, number>
 }
 
-export interface VolumeBoostConfig {
+export interface Bundle {
+  id?: string
   tokenAddress: string
-  walletIds: number[]
-  volumeTarget: number
-  duration: number
-  intervalMs: number
+  mode: string
+  walletsCount: number
+  devWalletBuyAmount: number
+  delaySeconds?: number
+  minDelay?: number
+  maxDelay?: number
+  status?: "pending" | "running" | "completed" | "failed"
+  progress?: number
+  createdAt?: Date
+  completedAt?: Date
 }
 
-export interface SellTokensConfig {
-  tokenAddress: string
-  walletIds: number[]
-  percentage: number
-  slippage?: number
+export interface PaginatedResult<T> {
+  data: T[]
+  pagination: {
+    page: number
+    limit: number
+    totalPages: number
+    totalCount: number
+  }
 }
 
-// Event types
-export interface BundlerSDKEvents {
-  // Bundle events
-  "bundle:created": (bundle: BundleConfig) => void
-  "bundle:launched": (bundle: BundleConfig) => void
-  "bundle:failed": (bundle: BundleConfig, error: Error) => void
-  "bundle:status-changed": (bundleId: string, status: string) => void
+// Mock data storage
+const mockTokens: Token[] = []
+const mockWallets: Wallet[] = []
+const mockBundles: Bundle[] = []
+const activityLogs: ActivityLog[] = []
 
-  // Wallet events
-  "wallet:balance-changed": (balance: WalletBalance) => void
-  "wallet:token-balance-changed": (balance: WalletBalance) => void
+// Generate some initial mock data
+for (let i = 1; i <= 20; i++) {
+  mockTokens.push({
+    id: `token-${i}`,
+    token_id: `token-${i}`,
+    name: `Token ${i}`,
+    symbol: `TKN${i}`,
+    address: `0x${i.toString().padStart(40, "0")}`,
+    description: `Description for Token ${i}`,
+    twitter: `https://twitter.com/token${i}`,
+    telegram: `https://t.me/token${i}`,
+    discord: `https://discord.gg/token${i}`,
+    website: `https://token${i}.com`,
+    image: `https://picsum.photos/200/200?random=${i}`,
+    price: Math.random() * 10,
+    priceChangePercent: Math.random() * 20 - 10,
+    marketCap: Math.random() * 1000000,
+    volume: Math.random() * 100000,
+    createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+  })
+}
 
-  // Token events
-  "token:price-changed": (token: Token) => void
-  "token:created": (token: Token) => void
-  "token:updated": (token: Token) => void
-
-  // Volume events
-  "volume:boost-started": (config: VolumeBoostConfig) => void
-  "volume:boost-stopped": (tokenAddress: string) => void
-  "volume:trade-executed": (tokenAddress: string, volume: number) => void
-
-  // Sell events
-  "tokens:sold": (config: SellTokensConfig, result: any) => void
-
-  // Activity logs
-  "activity:log": (log: ActivityLog) => void
-
-  // System events
-  "system:connected": () => void
-  "system:disconnected": () => void
-  "system:error": (error: Error) => void
+for (let i = 1; i <= 50; i++) {
+  mockWallets.push({
+    id: `wallet-${i}`,
+    address: `0x${i.toString().padStart(40, "0")}`,
+    privateKey: `0x${Math.random().toString(16).substring(2, 42)}`,
+    balance: Math.random() * 10,
+    tokenBalances: {},
+  })
 }
 
 export class BundlerSDK extends EventEmitter {
-  private bundles: Map<string, BundleConfig> = new Map()
-  private tokens: Map<string, Token> = new Map()
-  private walletBalances: Map<string, WalletBalance> = new Map()
-  private volumeBoosts: Map<string, VolumeBoostConfig> = new Map()
-  private priceUpdateIntervals: Map<string, NodeJS.Timeout> = new Map()
-  private balanceUpdateIntervals: Map<string, NodeJS.Timeout> = new Map()
-  private isConnected = false
+  private connected = true
+  private priceUpdateIntervals: Record<string, NodeJS.Timeout> = {}
+  private walletUpdateInterval: NodeJS.Timeout | null = null
 
   constructor() {
     super()
-    this.setMaxListeners(100) // Increase max listeners for multiple components
-    this.initialize()
+    this.setupInitialLogs()
   }
 
-  private initialize() {
-    // Simulate connection
-    setTimeout(() => {
-      this.isConnected = true
-      this.emit("system:connected")
-      this.addLog("System connected successfully", "success", "system")
-    }, 1000)
+  private setupInitialLogs() {
+    this.addLog("System initialized", "info", "system")
+    this.addLog("Connected to network", "success", "system")
+    this.addLog("Wallet provider ready", "info", "wallet")
   }
 
-  // Bundle Functions
-  async createBundle(config: Omit<BundleConfig, "id" | "createdAt" | "updatedAt">): Promise<BundleConfig> {
-    try {
-      const bundleId = `bundle_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-      const bundle: BundleConfig = {
-        ...config,
-        id: bundleId,
-        status: "pending",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }
-
-      this.bundles.set(bundleId, bundle)
-
-      this.addLog(
-        `Bundle created for ${config.tokenSymbol} on ${config.platform} with ${config.walletsCount} wallets`,
-        "success",
-        "bundle",
-        { bundleId, config },
-      )
-
-      this.emit("bundle:created", bundle)
-
-      return bundle
-    } catch (error) {
-      this.addLog(`Failed to create bundle: ${error.message}`, "error", "bundle")
-      throw error
-    }
+  // Connection management
+  public isConnected(): boolean {
+    return this.connected
   }
 
-  async launchBundle(bundleId: string): Promise<BundleConfig> {
-    try {
-      const bundle = this.bundles.get(bundleId)
-      if (!bundle) {
-        throw new Error(`Bundle ${bundleId} not found`)
-      }
-
-      // Update bundle status
-      bundle.status = "launching"
-      bundle.updatedAt = new Date().toISOString()
-      this.bundles.set(bundleId, bundle)
-
-      this.addLog(`Launching bundle ${bundleId}...`, "info", "bundle", { bundleId })
-      this.emit("bundle:status-changed", bundleId, "launching")
-
-      // Simulate launch process
-      await this.simulateLaunchProcess(bundle)
-
-      // Update to launched status
-      bundle.status = "launched"
-      bundle.updatedAt = new Date().toISOString()
-      this.bundles.set(bundleId, bundle)
-
-      this.addLog(`Bundle ${bundleId} launched successfully`, "success", "bundle", { bundleId })
-      this.emit("bundle:launched", bundle)
-      this.emit("bundle:status-changed", bundleId, "launched")
-
-      // Start real-time updates for this token
-      this.startTokenUpdates(bundle.tokenAddress)
-      this.startWalletUpdates(bundle.wallets || [])
-
-      return bundle
-    } catch (error) {
-      const bundle = this.bundles.get(bundleId)
-      if (bundle) {
-        bundle.status = "failed"
-        bundle.updatedAt = new Date().toISOString()
-        this.bundles.set(bundleId, bundle)
-        this.emit("bundle:failed", bundle, error)
-      }
-
-      this.addLog(`Bundle launch failed: ${error.message}`, "error", "bundle")
-      throw error
-    }
-  }
-
-  private async simulateLaunchProcess(bundle: BundleConfig): Promise<void> {
-    const steps = [
-      "Initializing wallet connections...",
-      "Setting up token parameters...",
-      "Deploying smart contract...",
-      "Configuring liquidity pools...",
-      "Executing bundle transactions...",
-      "Verifying token creation...",
-      "Finalizing launch process...",
-    ]
-
-    for (let i = 0; i < steps.length; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 1000))
-      this.addLog(steps[i], "info", "bundle", { bundleId: bundle.id, step: i + 1, total: steps.length })
-    }
-  }
-
-  getBundleForToken(tokenAddress: string): BundleConfig | null {
-    for (const bundle of this.bundles.values()) {
-      if (bundle.tokenAddress === tokenAddress) {
-        return bundle
-      }
-    }
-    return null
-  }
-
-  getTokens(): Token[] {
-    return Array.from(this.tokens.values())
-  }
-
-  getToken(address: string): Token | null {
-    return this.tokens.get(address) || null
-  }
-
-  // Token price updates
-  private startTokenUpdates(tokenAddress: string): void {
-    // Clear existing interval if any
-    const existingInterval = this.priceUpdateIntervals.get(tokenAddress)
-    if (existingInterval) {
-      clearInterval(existingInterval)
-    }
-
-    // Create mock token if it doesn't exist
-    if (!this.tokens.has(tokenAddress)) {
-      const bundle = this.getBundleForToken(tokenAddress)
-      const token: Token = {
-        id: tokenAddress,
-        address: tokenAddress,
-        name: bundle?.tokenName || "Unknown Token",
-        symbol: bundle?.tokenSymbol || "UNK",
-        price: Math.random() * 0.01,
-        marketCap: Math.random() * 10000000 + 1000000,
-        priceChange24h: Math.random() * 20 - 10,
-        bundleReady: true,
-        bundleStatus: "launched",
-        launchedDate: new Date().toISOString(),
-      }
-      this.tokens.set(tokenAddress, token)
-    }
-
-    // Start price updates every 3-8 seconds
-    const interval = setInterval(
-      () => {
-        this.updateTokenPrice(tokenAddress)
-      },
-      3000 + Math.random() * 5000,
-    )
-
-    this.priceUpdateIntervals.set(tokenAddress, interval)
-  }
-
-  private updateTokenPrice(tokenAddress: string): void {
-    const token = this.tokens.get(tokenAddress)
-    if (!token) return
-
-    // Generate realistic price movement
-    const changePercent = (Math.random() - 0.5) * 0.1 // -5% to +5%
-    const newPrice = Math.max(0.000001, token.price! * (1 + changePercent))
-    const newMarketCap = token.marketCap! * (1 + changePercent)
-
-    const updatedToken: Token = {
-      ...token,
-      price: newPrice,
-      marketCap: newMarketCap,
-      priceChange24h: (token.priceChange24h || 0) + changePercent * 100,
-    }
-
-    this.tokens.set(tokenAddress, updatedToken)
-
-    // Emit price change event
-    this.emit("token:price-changed", updatedToken)
-
-    // Log significant price movements
-    if (Math.abs(changePercent * 100) > 2) {
-      const direction = changePercent > 0 ? "increased" : "decreased"
-      this.addLog(
-        `${token.symbol} price ${direction} by ${Math.abs(changePercent * 100).toFixed(2)}% to $${newPrice.toFixed(8)}`,
-        changePercent > 0 ? "success" : "warning",
-        "token",
-        { tokenAddress, priceChange: changePercent * 100, newPrice },
-      )
-    }
-  }
-
-  // Wallet balance updates
-  private startWalletUpdates(wallets: WalletConfig[]): void {
-    wallets.forEach((wallet) => {
-      // Initialize wallet balance if not exists
-      const balanceKey = `${wallet.address}_${wallet.tokenAddress}`
-      if (!this.walletBalances.has(balanceKey)) {
-        const balance: WalletBalance = {
-          walletId: wallet.id,
-          address: wallet.address,
-          solBalance: wallet.solAmount || Math.random() * 10,
-          tokenBalance: wallet.tokenAmount || Math.floor(Math.random() * 1000000),
-          tokenAddress: wallet.tokenAddress,
-        }
-        this.walletBalances.set(balanceKey, balance)
-      }
-
-      // Start balance updates
-      const interval = setInterval(
-        () => {
-          this.updateWalletBalance(balanceKey)
-        },
-        5000 + Math.random() * 10000,
-      )
-
-      this.balanceUpdateIntervals.set(balanceKey, interval)
+  public connect(): Promise<boolean> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.connected = true
+        this.emit("connected")
+        this.addLog("Connected to bundler service", "success", "system")
+        resolve(true)
+      }, 500)
     })
   }
 
-  private updateWalletBalance(balanceKey: string): void {
-    const balance = this.walletBalances.get(balanceKey)
-    if (!balance) return
+  public disconnect(): Promise<boolean> {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        this.connected = false
+        this.emit("disconnected")
+        this.addLog("Disconnected from bundler service", "info", "system")
+        resolve(true)
+      }, 500)
+    })
+  }
 
-    // Update SOL balance (small changes)
-    const solChange = (Math.random() - 0.5) * 0.1
-    const newSolBalance = Math.max(0, balance.solBalance + solChange)
+  // Token methods
+  public async getTokens(
+    options: { page: number; limit: number } = { page: 1, limit: 10 },
+  ): Promise<PaginatedResult<Token>> {
+    const { page, limit } = options
+    const start = (page - 1) * limit
+    const end = start + limit
+    const data = mockTokens.slice(start, end)
 
-    // Update token balance (trading activity)
-    const tokenChangePercent = (Math.random() - 0.5) * 0.05 // -2.5% to +2.5%
-    const newTokenBalance = Math.floor(balance.tokenBalance * (1 + tokenChangePercent))
-
-    const updatedBalance: WalletBalance = {
-      ...balance,
-      solBalance: newSolBalance,
-      tokenBalance: newTokenBalance,
-    }
-
-    this.walletBalances.set(balanceKey, updatedBalance)
-
-    // Emit balance change events
-    if (Math.abs(solChange) > 0.01) {
-      this.emit("wallet:balance-changed", updatedBalance)
-    }
-
-    if (Math.abs(tokenChangePercent) > 0.01) {
-      this.emit("wallet:token-balance-changed", updatedBalance)
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(mockTokens.length / limit),
+        totalCount: mockTokens.length,
+      },
     }
   }
 
-  // Volume boost functions
-  async startVolumeBoost(config: VolumeBoostConfig): Promise<void> {
-    try {
-      this.volumeBoosts.set(config.tokenAddress, config)
+  public async getToken(tokenAddress: string): Promise<Token | null> {
+    const token = mockTokens.find((t) => t.address === tokenAddress)
+    return token || null
+  }
+
+  public async createToken(tokenData: Partial<Token>): Promise<Token> {
+    const newToken: Token = {
+      id: uuidv4(),
+      token_id: uuidv4(),
+      name: tokenData.name || "Unknown Token",
+      symbol: tokenData.symbol || "UNK",
+      address: tokenData.address || `0x${Math.random().toString(16).substring(2, 42)}`,
+      description: tokenData.description,
+      twitter: tokenData.twitter,
+      telegram: tokenData.telegram,
+      discord: tokenData.discord,
+      website: tokenData.website,
+      image: tokenData.image,
+      price: 0,
+      priceChangePercent: 0,
+      marketCap: 0,
+      volume: 0,
+      createdAt: new Date(),
+    }
+
+    mockTokens.push(newToken)
+    this.addLog(`Token ${newToken.symbol} created`, "success", "token", { tokenAddress: newToken.address })
+    this.emit("tokenCreated", newToken)
+
+    return newToken
+  }
+
+  // Bundle methods
+  public async createBundle(bundleData: Partial<Bundle>): Promise<Bundle> {
+    if (!bundleData.tokenAddress) {
+      throw new Error("Token address is required")
+    }
+
+    const newBundle: Bundle = {
+      id: uuidv4(),
+      tokenAddress: bundleData.tokenAddress,
+      mode: bundleData.mode || "standard",
+      walletsCount: bundleData.walletsCount || 10,
+      devWalletBuyAmount: bundleData.devWalletBuyAmount || 1,
+      delaySeconds: bundleData.delaySeconds,
+      minDelay: bundleData.minDelay,
+      maxDelay: bundleData.maxDelay,
+      status: "pending",
+      progress: 0,
+      createdAt: new Date(),
+    }
+
+    mockBundles.push(newBundle)
+    this.addLog(`Bundle created for token ${bundleData.tokenAddress}`, "info", "bundle", {
+      tokenAddress: bundleData.tokenAddress,
+    })
+    this.emit("bundleCreated", newBundle)
+
+    return newBundle
+  }
+
+  public async launchBundle(bundleId: string): Promise<Bundle> {
+    const bundle = mockBundles.find((b) => b.id === bundleId)
+    if (!bundle) {
+      throw new Error("Bundle not found")
+    }
+
+    bundle.status = "running"
+    this.addLog(`Bundle ${bundleId} launching`, "info", "bundle", { tokenAddress: bundle.tokenAddress })
+    this.emit("bundleLaunching", bundle)
+
+    // Simulate progress updates
+    let progress = 0
+    const progressInterval = setInterval(() => {
+      progress += Math.random() * 10
+      if (progress >= 100) {
+        progress = 100
+        clearInterval(progressInterval)
+
+        bundle.status = "completed"
+        bundle.progress = 100
+        bundle.completedAt = new Date()
+
+        this.addLog(`Bundle ${bundleId} launched successfully`, "success", "bundle", {
+          tokenAddress: bundle.tokenAddress,
+        })
+        this.emit("bundleLaunched", bundle)
+
+        // Start price updates for this token
+        this.startPriceUpdates(bundle.tokenAddress)
+
+        // Initialize wallet balances for this token
+        this.initializeWalletBalances(bundle.tokenAddress, bundle.walletsCount)
+      } else {
+        bundle.progress = Math.floor(progress)
+        this.emit("bundleProgress", { bundleId, progress: bundle.progress })
+      }
+    }, 500)
+
+    return bundle
+  }
+
+  public async getBundleForToken(tokenAddress: string): Promise<Bundle | null> {
+    const bundle = mockBundles.find((b) => b.tokenAddress === tokenAddress)
+    return bundle || null
+  }
+
+  // Wallet methods
+  public async getWallets(
+    options: { page: number; limit: number } = { page: 1, limit: 10 },
+  ): Promise<PaginatedResult<Wallet>> {
+    const { page, limit } = options
+    const start = (page - 1) * limit
+    const end = start + limit
+    const data = mockWallets.slice(start, end)
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(mockWallets.length / limit),
+        totalCount: mockWallets.length,
+      },
+    }
+  }
+
+  public async getWalletsWithToken(tokenAddress: string): Promise<Wallet[]> {
+    return mockWallets.filter((w) => w.tokenBalances[tokenAddress] && w.tokenBalances[tokenAddress] > 0)
+  }
+
+  // Token operations
+  public async sellTokens(tokenAddress: string, walletAddresses: string[], percentage: number): Promise<boolean> {
+    const token = await this.getToken(tokenAddress)
+    if (!token) {
+      throw new Error("Token not found")
+    }
+
+    const wallets = mockWallets.filter((w) => walletAddresses.includes(w.address))
+    if (wallets.length === 0) {
+      throw new Error("No valid wallets found")
+    }
+
+    // Process each wallet
+    for (const wallet of wallets) {
+      const tokenBalance = wallet.tokenBalances[tokenAddress] || 0
+      if (tokenBalance <= 0) continue
+
+      const amountToSell = tokenBalance * (percentage / 100)
+      const solReceived = amountToSell * (token.price || 0)
+
+      // Update balances
+      wallet.tokenBalances[tokenAddress] -= amountToSell
+      wallet.balance += solReceived
 
       this.addLog(
-        `Volume boost started for ${config.tokenAddress} with ${config.walletIds.length} wallets`,
-        "info",
-        "volume",
-        config,
+        `Sold ${amountToSell.toFixed(2)} ${token.symbol} for ${solReceived.toFixed(4)} SOL from wallet ${wallet.address.substring(0, 6)}...`,
+        "success",
+        "token",
+        { tokenAddress, walletAddress: wallet.address },
       )
 
-      this.emit("volume:boost-started", config)
-
-      // Simulate volume trading
-      this.simulateVolumeTrading(config)
-    } catch (error) {
-      this.addLog(`Failed to start volume boost: ${error.message}`, "error", "volume")
-      throw error
-    }
-  }
-
-  async stopVolumeBoost(tokenAddress: string): Promise<void> {
-    this.volumeBoosts.delete(tokenAddress)
-    this.addLog(`Volume boost stopped for ${tokenAddress}`, "info", "volume")
-    this.emit("volume:boost-stopped", tokenAddress)
-  }
-
-  private simulateVolumeTrading(config: VolumeBoostConfig): void {
-    const interval = setInterval(() => {
-      if (!this.volumeBoosts.has(config.tokenAddress)) {
-        clearInterval(interval)
-        return
-      }
-
-      const volume = Math.random() * 1000 + 100
-      this.addLog(`Volume trade executed: ${volume.toFixed(2)} SOL`, "info", "volume", {
-        tokenAddress: config.tokenAddress,
-        volume,
+      this.emit("walletTokenBalanceChanged", {
+        walletAddress: wallet.address,
+        tokenAddress,
+        previousBalance: tokenBalance,
+        newBalance: wallet.tokenBalances[tokenAddress],
+        change: -amountToSell,
       })
 
-      this.emit("volume:trade-executed", config.tokenAddress, volume)
-    }, config.intervalMs || 5000)
+      this.emit("walletBalanceChanged", {
+        walletAddress: wallet.address,
+        previousBalance: wallet.balance - solReceived,
+        newBalance: wallet.balance,
+        change: solReceived,
+      })
+    }
+
+    // Emit sell event
+    this.emit("sellTokens", {
+      tokenAddress,
+      walletAddresses,
+      percentage,
+    })
+
+    return true
   }
 
-  // Sell tokens function
-  async sellTokens(config: SellTokensConfig): Promise<any> {
-    try {
-      const result = {
-        tokenAddress: config.tokenAddress,
-        walletIds: config.walletIds,
-        percentage: config.percentage,
-        totalTokensSold: 0,
-        totalSolReceived: 0,
-        transactionHashes: [],
-      }
+  public async boostVolume(tokenAddress: string, amount: number): Promise<boolean> {
+    const token = await this.getToken(tokenAddress)
+    if (!token) {
+      throw new Error("Token not found")
+    }
 
-      // Simulate selling process
-      for (const walletId of config.walletIds) {
-        const balanceKey = Object.keys(this.walletBalances).find(
-          (key) =>
-            this.walletBalances.get(key)?.walletId === walletId &&
-            this.walletBalances.get(key)?.tokenAddress === config.tokenAddress,
-        )
+    // Update token volume
+    token.volume = (token.volume || 0) + amount
 
-        if (balanceKey) {
-          const balance = this.walletBalances.get(balanceKey)!
-          const tokensToSell = Math.floor(balance.tokenBalance * (config.percentage / 100))
-          const solReceived = tokensToSell * 0.0000025 // Mock conversion rate
+    this.addLog(`Volume boosted for ${token.symbol} by ${amount.toFixed(2)} SOL`, "info", "volume", { tokenAddress })
 
-          // Update balance
-          const updatedBalance: WalletBalance = {
-            ...balance,
-            tokenBalance: balance.tokenBalance - tokensToSell,
-            solBalance: balance.solBalance + solReceived,
-          }
+    this.emit("boostVolume", {
+      tokenAddress,
+      amount,
+      newVolume: token.volume,
+    })
 
-          this.walletBalances.set(balanceKey, updatedBalance)
+    return true
+  }
 
-          result.totalTokensSold += tokensToSell
-          result.totalSolReceived += solReceived
-          result.transactionHashes.push(`0x${Math.random().toString(16).substr(2, 64)}`)
+  // Price updates
+  private startPriceUpdates(tokenAddress: string): void {
+    if (this.priceUpdateIntervals[tokenAddress]) {
+      clearInterval(this.priceUpdateIntervals[tokenAddress])
+    }
 
-          this.emit("wallet:token-balance-changed", updatedBalance)
-          this.emit("wallet:balance-changed", updatedBalance)
+    const token = mockTokens.find((t) => t.address === tokenAddress)
+    if (!token) return
+
+    // Initialize price if not set
+    if (!token.price) {
+      token.price = 0.001 + Math.random() * 0.01
+      token.marketCap = token.price * 1000000
+      token.volume = token.price * 50000 * Math.random()
+    }
+
+    this.priceUpdateIntervals[tokenAddress] = setInterval(
+      () => {
+        if (!token) return
+
+        const previousPrice = token.price || 0
+        // Random price change between -5% and +8%
+        const changePercent = Math.random() * 13 - 5
+        const newPrice = previousPrice * (1 + changePercent / 100)
+
+        token.price = newPrice
+        token.priceChangePercent = (newPrice / previousPrice - 1) * 100
+        token.marketCap = newPrice * 1000000
+        token.volume = (token.volume || 0) * (1 + (Math.random() * 10 - 5) / 100)
+
+        this.emit("tokenPriceChanged", {
+          tokenAddress,
+          previousPrice,
+          newPrice,
+          changePercent: token.priceChangePercent,
+        })
+
+        // Log significant price changes
+        if (Math.abs(changePercent) > 3) {
+          const direction = changePercent > 0 ? "increased" : "decreased"
+          const logType: LogType = changePercent > 0 ? "success" : "warning"
+
+          this.addLog(
+            `${token.symbol} price ${direction} by ${Math.abs(changePercent).toFixed(2)}%`,
+            logType,
+            "token",
+            { tokenAddress, previousPrice, newPrice },
+          )
         }
-      }
+      },
+      3000 + Math.random() * 5000,
+    ) // Random interval between 3-8 seconds
+  }
+
+  // Initialize wallet balances for a token
+  private initializeWalletBalances(tokenAddress: string, count: number): void {
+    const token = mockTokens.find((t) => t.address === tokenAddress)
+    if (!token) return
+
+    // Select random wallets
+    const selectedWallets = [...mockWallets]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.min(count, mockWallets.length))
+
+    // Distribute tokens
+    for (const wallet of selectedWallets) {
+      const tokenAmount = 1000 + Math.random() * 9000
+      wallet.tokenBalances[tokenAddress] = tokenAmount
 
       this.addLog(
-        `Sold ${result.totalTokensSold.toLocaleString()} tokens (${config.percentage}%) from ${config.walletIds.length} wallets`,
-        "success",
-        "bundle",
-        result,
+        `Wallet ${wallet.address.substring(0, 6)}... received ${tokenAmount.toFixed(2)} ${token.symbol}`,
+        "info",
+        "wallet",
+        { walletAddress: wallet.address, tokenAddress },
       )
 
-      this.emit("tokens:sold", config, result)
-      return result
-    } catch (error) {
-      this.addLog(`Failed to sell tokens: ${error.message}`, "error", "bundle")
-      throw error
+      this.emit("walletTokenBalanceChanged", {
+        walletAddress: wallet.address,
+        tokenAddress,
+        previousBalance: 0,
+        newBalance: tokenAmount,
+        change: tokenAmount,
+      })
+    }
+
+    // Start wallet balance updates
+    if (!this.walletUpdateInterval) {
+      this.startWalletBalanceUpdates()
     }
   }
 
-  // Activity logging
-  private addLog(message: string, type: ActivityLog["type"], category: ActivityLog["category"], data?: any): void {
+  // Start wallet balance updates
+  private startWalletBalanceUpdates(): void {
+    if (this.walletUpdateInterval) {
+      clearInterval(this.walletUpdateInterval)
+    }
+
+    this.walletUpdateInterval = setInterval(
+      () => {
+        // Get all tokens with price
+        const activeTokens = mockTokens.filter((t) => t.price && t.price > 0)
+        if (activeTokens.length === 0) return
+
+        // Select a random token
+        const randomToken = activeTokens[Math.floor(Math.random() * activeTokens.length)]
+
+        // Find wallets with this token
+        const walletsWithToken = mockWallets.filter(
+          (w) => w.tokenBalances[randomToken.address] && w.tokenBalances[randomToken.address] > 0,
+        )
+
+        if (walletsWithToken.length === 0) return
+
+        // Select a random wallet
+        const randomWallet = walletsWithToken[Math.floor(Math.random() * walletsWithToken.length)]
+
+        // Random balance change between -2% and +5%
+        const changePercent = Math.random() * 7 - 2
+        const previousBalance = randomWallet.tokenBalances[randomToken.address]
+        const change = previousBalance * (changePercent / 100)
+        const newBalance = previousBalance + change
+
+        randomWallet.tokenBalances[randomToken.address] = newBalance
+
+        this.emit("walletTokenBalanceChanged", {
+          walletAddress: randomWallet.address,
+          tokenAddress: randomToken.address,
+          previousBalance,
+          newBalance,
+          change,
+        })
+
+        // Log significant changes
+        if (Math.abs(changePercent) > 3) {
+          const direction = changePercent > 0 ? "increased" : "decreased"
+          const logType: LogType = changePercent > 0 ? "success" : "warning"
+
+          this.addLog(
+            `Wallet ${randomWallet.address.substring(0, 6)}... ${direction} ${randomToken.symbol} balance by ${Math.abs(changePercent).toFixed(2)}%`,
+            logType,
+            "wallet",
+            { walletAddress: randomWallet.address, tokenAddress: randomToken.address },
+          )
+        }
+      },
+      5000 + Math.random() * 10000,
+    ) // Random interval between 5-15 seconds
+  }
+
+  // Activity logs
+  public addLog(message: string, type: LogType = "info", category: LogCategory = "system", details?: any): ActivityLog {
     const log: ActivityLog = {
-      id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      timestamp: new Date().toLocaleTimeString(),
+      id: uuidv4(),
       message,
+      timestamp: new Date(),
       type,
       category,
-      data,
+      ...details,
     }
 
-    this.emit("activity:log", log)
-  }
+    activityLogs.push(log)
 
-  // Utility methods
-  getWalletBalance(walletId: number, tokenAddress?: string): WalletBalance | null {
-    for (const balance of this.walletBalances.values()) {
-      if (balance.walletId === walletId && (!tokenAddress || balance.tokenAddress === tokenAddress)) {
-        return balance
-      }
+    // Keep logs under a reasonable limit
+    if (activityLogs.length > 1000) {
+      activityLogs.shift()
     }
-    return null
+
+    this.emit("newLog", log)
+    return log
   }
 
-  getAllWalletBalances(tokenAddress?: string): WalletBalance[] {
-    const balances = Array.from(this.walletBalances.values())
-    return tokenAddress ? balances.filter((b) => b.tokenAddress === tokenAddress) : balances
+  public getLogs(
+    options: {
+      limit?: number
+      types?: LogType[]
+      categories?: LogCategory[]
+      tokenAddress?: string
+      walletAddress?: string
+    } = {},
+  ): ActivityLog[] {
+    let filteredLogs = [...activityLogs]
+
+    if (options.types && options.types.length > 0) {
+      filteredLogs = filteredLogs.filter((log) => options.types!.includes(log.type))
+    }
+
+    if (options.categories && options.categories.length > 0) {
+      filteredLogs = filteredLogs.filter((log) => options.categories!.includes(log.category))
+    }
+
+    if (options.tokenAddress) {
+      filteredLogs = filteredLogs.filter((log) => log.tokenAddress === options.tokenAddress)
+    }
+
+    if (options.walletAddress) {
+      filteredLogs = filteredLogs.filter((log) => log.walletAddress === options.walletAddress)
+    }
+
+    // Sort by timestamp (newest first)
+    filteredLogs.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+
+    if (options.limit && options.limit > 0) {
+      filteredLogs = filteredLogs.slice(0, options.limit)
+    }
+
+    return filteredLogs
   }
 
-  // Cleanup
-  disconnect(): void {
-    // Clear all intervals
-    this.priceUpdateIntervals.forEach((interval) => clearInterval(interval))
-    this.balanceUpdateIntervals.forEach((interval) => clearInterval(interval))
-
-    this.priceUpdateIntervals.clear()
-    this.balanceUpdateIntervals.clear()
-    this.volumeBoosts.clear()
-
-    this.isConnected = false
-    this.addLog("System disconnected", "info", "system")
-    this.emit("system:disconnected")
-  }
-
-  // Connection status
-  isSystemConnected(): boolean {
-    return this.isConnected
+  public clearLogs(): void {
+    activityLogs.length = 0
+    this.emit("logsCleared")
   }
 }
 
-// Create singleton instance
+// Export a singleton instance
 export const bundlerSDK = new BundlerSDK()
-
-// Type-safe event emitter
-export interface TypedEventEmitter<T> {
-  on<K extends keyof T>(event: K, listener: T[K]): this
-  off<K extends keyof T>(event: K, listener: T[K]): this
-  emit<K extends keyof T>(event: K, ...args: Parameters<T[K]>): boolean
-  once<K extends keyof T>(event: K, listener: T[K]): this
-}
-
-// Export typed SDK
-export const typedBundlerSDK = bundlerSDK as TypedEventEmitter<BundlerSDKEvents> & BundlerSDK
