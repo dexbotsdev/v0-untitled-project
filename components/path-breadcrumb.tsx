@@ -2,7 +2,6 @@
 
 import { usePathname } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
-import Image from "next/image"
 
 export function PathBreadcrumb() {
   const pathname = usePathname()
@@ -17,13 +16,8 @@ export function PathBreadcrumb() {
   }
 
   return (
-    <div className="relative flex items-center"> 
-      <Badge
-        variant="secondary"
-        className="text-muted-foreground bg-[#11111D]/80 text-[12px] rounded-[5px] pr-3 py-1 z-10 backdrop-blur-sm border border-stone-800"
-      >
-        {getBreadcrumb()}
-      </Badge>
-    </div>
+    <Badge variant="secondary" className="text-muted-foreground bg-[#11111D] text-[12px] rounded-[5px]">
+      {getBreadcrumb()}
+    </Badge>
   )
 }

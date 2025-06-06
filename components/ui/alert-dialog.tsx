@@ -91,12 +91,11 @@ const AlertDialogCancel = React.forwardRef<
 ))
 AlertDialogCancel.displayName = AlertDialogPrimitive.Cancel.displayName
 
-// Export both the original names and the aliases to maintain compatibility
 export {
   AlertDialog,
-  AlertDialogTrigger,
   AlertDialogPortal,
   AlertDialogOverlay,
+  AlertDialogTrigger,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogFooter,
@@ -104,16 +103,4 @@ export {
   AlertDialogDescription,
   AlertDialogAction,
   AlertDialogCancel,
-}
-
-// Also export the Dialog aliases for components that expect those names
-export {
-  AlertDialog as Dialog,
-  AlertDialogTrigger as DialogTrigger,
-  AlertDialogPortal as DialogPortal,
-  AlertDialogOverlay as DialogOverlay,
-  AlertDialogContent as DialogContent,
-  AlertDialogHeader as DialogHeader,
-  AlertDialogFooter as DialogFooter,
-  AlertDialogTitle as DialogTitle,
 }

@@ -1,46 +1,51 @@
-// Enhanced mock data for the application
+import { Keypair } from "@solana/web3.js"
+import type { WalletAttributes } from "@/models/bundlerConfig"
 
-// Function to simulate network delay
-export const simulateNetworkDelay = (min = 500, max = 1500) =>
-  new Promise((resolve) => {
-    const delay = min + Math.random() * (max - min)
-    setTimeout(resolve, delay)
-  })
+export function generateMockToken(symbol: string) {
+  return {
+    id: Math.floor(Math.random() * 1000),
+    name: `${symbol.toUpperCase()} Token`,
+    symbol: symbol.toUpperCase(),
+    description: `This is a mock token for ${symbol.toUpperCase()}`,
+    twitter: `https://twitter.com/${symbol.toLowerCase()}`,
+    telegram: `https://t.me/${symbol.toLowerCase()}group`,
+    discord: `https://discord.gg/${symbol.toLowerCase()}`,
+    website: `https://${symbol.toLowerCase()}.com`,
+    image: `https://example.com/${symbol.toLowerCase()}.png`,
+    address: Keypair.generate().publicKey.toString(),
+  }
+}
 
-// Function to generate a mock token
-export const generateMockToken = (tokenSymbol: string) => ({
-  id: Math.floor(Math.random() * 1000),
-  name: `Mock Token ${tokenSymbol}`,
-  symbol: tokenSymbol,
-  address: `0x${Math.random().toString(16).substring(2, 42)}`,
-  description: `This is a mock token with symbol ${tokenSymbol}`,
-  twitter: `https://twitter.com/mocktoken`,
-  telegram: `https://t.me/mocktoken`,
-  discord: `https://discord.gg/mocktoken`,
-  website: `https://mocktoken.com`,
-  image: `/placeholder.svg`,
-})
-
-// Function to generate a mock bundler configuration
-export const generateMockBundlerConfig = (tokenAddress: string, walletsCount: number) => ({
-  id: Math.floor(Math.random() * 1000),
-  tokenAddress: tokenAddress,
-  mode: "standard",
-  walletsCount: walletsCount,
-  devWalletBuyAmount: 0.5,
-  delaySeconds: 30,
-  minDelay: 10,
-  maxDelay: 60,
-  wallets: Array.from({ length: walletsCount }, (_, index) => ({
-    id: index + 1,
-    address: `wallet_${index + 1}`,
-    solAmount: Math.random() * 10,
+export function generateMockWallet(): WalletAttributes {
+  const keypair = Keypair.generate()
+  return {
+    id: Math.floor(Math.random() * 1000),
+    address: keypair.publicKey.toString(),
+    privateKey: Buffer.from(keypair.secretKey).toString("hex"),
+    tokenAddress: Keypair.generate().publicKey.toString(),
+    tradeAmount: Number.parseFloat((Math.random() * 10).toFixed(2)),
+    buyPrice: Number.parseFloat((Math.random() * 100).toFixed(4)),
     tokenAmount: Math.floor(Math.random() * 1000000),
-    tradeAmount: Math.random() * 5,
-    buyPrice: Math.random() * 0.1,
-    tokenSupply: Math.floor(Math.random() * 10000000),
-  })),
-  status: "active",
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-})
+    solAmount: Number.parseFloat((Math.random() * 10).toFixed(2)),
+    tokenSupply: Math.floor(Math.random() * 1000000000),
+  }
+}
+
+export function generateMockBundlerConfig(tokenAddress: string, walletsCount: number) {
+  return {
+    id: Math.floor(Math.random() * 1000),
+    tokenAddress: tokenAddress,
+    mode: ["justLaunch", "bundleBlock0", "delayedLaunch", "stagLaunch"][Math.floor(Math.random() * 4)],
+    walletsCount: walletsCount,
+    devWalletBuyAmount: Number.parseFloat((Math.random() * 50).toFixed(2)),
+    delaySeconds: Math.floor(Math.random() * 60),
+    minDelay: Math.floor(Math.random() * 30),
+    maxDelay: Math.floor(Math.random() * 30) + 30,
+    wallets: Array.from({ length: walletsCount }, () => generateMockWallet()),
+  }
+}
+
+export async function simulateNetworkDelay(minDelay = 200, maxDelay = 1000) {
+  const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1) + minDelay)
+  await new Promise((resolve) => setTimeout(resolve, delay))
+}

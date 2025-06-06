@@ -1,15 +1,9 @@
-import Image from "next/image"
-
 export function BossLogo() {
   return (
-    <div className="flex items-center justify-center">
-      <Image
-        src="/images/iconlogo.png"
-        alt="Boss Logo"
-        width={32}
-        height={32}
-        className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]"
-      />
+    <div className="font-bold text-xl tracking-wider">
+      <span className="bg-clip-text text-transparent bg-gradient-to-b from-gray-100 via-gray-300 to-gray-400 drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.8)]">
+        BOSS
+      </span>
     </div>
   )
 }
