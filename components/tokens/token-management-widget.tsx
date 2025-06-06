@@ -38,6 +38,8 @@ interface TokenData {
   launchedDate?: string
   lastUpdated?: string
   isPumpSwapMigrated: boolean
+  usdMarketCap?: number
+  price?: string
 }
 
 // Update the PumpFunTokenData interface to include pump_swap_pool
@@ -997,7 +999,9 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
     setIsBundleWizardOpen(true)
   }
 
-  // Update the handleSaveBundleData function to store token settings
+  // Update the handleSaveBundleData function to update token data and wallet balances
+
+  // Find the handleSaveBundleData function and replace it with this updated version:
   const handleSaveBundleData = (bundleData: any) => {
     console.log("Bundle data saved:", bundleData)
     console.log("tokenData data is:", tokenData)
@@ -1027,16 +1031,22 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
       // Add the tab
       setActiveTabs((currentTabs) => [...currentTabs, bundleTabId])
 
-      // Set the tab wallets
-      setTabWallets((prev) => ({
-        ...prev,
-        [bundleTabId]: bundleData.wallets.map((wallet: any, index: number) => ({
+      // Generate mock token balances for wallets
+      const walletsWithTokens = bundleData.wallets.map((wallet: any, index: number) => {
+        const tokenBalance = Math.floor(Math.random() * 1000000) + 100000 // Random token balance
+        return {
           id: index + 1,
           address: wallet.address,
-          solBalance: Math.random() * 5, // Mock balance
-          tokenBalance: 0, // No tokens yet
+          solBalance: Math.max(0, wallet.amount - Math.random() * 0.1), // Slightly less SOL after bundle
+          tokenBalance: tokenBalance, // Add token balance
           tradeAmount: wallet.amount,
-        })),
+        }
+      })
+
+      // Set the tab wallets with token balances
+      setTabWallets((prev) => ({
+        ...prev,
+        [bundleTabId]: walletsWithTokens,
       }))
 
       // Set the tab running state
@@ -1055,7 +1065,7 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
         type: "bundle",
         isRunning: false,
         logs: [],
-        completed: false,
+        completed: true, // Mark as completed immediately
       }
 
       // Add the new task to the current tasks
@@ -1067,6 +1077,24 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
         ...prev,
         [selectedToken.id]: updatedTasks,
       }))
+
+      // Generate mock market data for the token
+      const mockMarketCap = Math.floor(Math.random() * 5000000) + 1000000
+      const mockUsdMarketCap = mockMarketCap * 0.8
+      const mockPrice = (mockUsdMarketCap / 1000000000).toFixed(8)
+
+      // Update token data with market information
+      setTokenData((prev) => {
+        if (!prev) return null
+        return {
+          ...prev,
+          marketCap: mockMarketCap,
+          usdMarketCap: mockUsdMarketCap,
+          price: mockPrice,
+          launchedDate: new Date().toLocaleString(),
+          lastUpdated: new Date().toLocaleTimeString(),
+        }
+      })
 
       // Add a log for tab creation with platform information and token settings
       let logMessage = `Bundle created for ${tokenData.symbol} on ${getPlatformLabel(bundleData.platform)} with mode: ${getBundleModeLabel(bundleData.mode)}`
@@ -1081,7 +1109,110 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
       }
 
       addGlobalLog(bundleTabId, "bundle", logMessage)
+
+      // Add logs about token creation and market data
+      addGlobalLog(
+        bundleTabId,
+        "bundle",
+        `Token ${tokenData.symbol} created successfully with initial market cap of ${(mockMarketCap / 1000000).toFixed(2)}M`,
+      )
+      addGlobalLog(bundleTabId, "bundle", `Initial price: ${mockPrice} USD`)
+
+      // Start periodic market updates
+      startMarketUpdates(bundleTabId)
     }
+  }
+
+  // Add this new function after handleSaveBundleData
+  const startMarketUpdates = (bundleTabId: string) => {
+    // Initial update
+    updateMarketData()
+
+    // Set interval for periodic updates
+    const intervalId = setInterval(() => {
+      if (!document.hidden) {
+        // Only update when tab is visible
+        updateMarketData()
+        updateWalletBalances(bundleTabId)
+      }
+    }, 5000) // Update every 5 seconds
+
+    // Store interval ID for cleanup
+    const key = `market-updates-${bundleTabId}`
+
+    // Clean up previous interval if it exists
+    if (window[key as any]) {
+      clearInterval(window[key as any])
+    }
+
+    // Store new interval ID
+    window[key as any] = intervalId
+  }
+
+  // Add this new function after startMarketUpdates
+  const updateMarketData = () => {
+    if (!tokenData) return
+
+    // Get current market cap
+    const currentMarketCap = tokenData.marketCap || 1000000
+
+    // Generate random change (-5% to +8%)
+    const changePercent = Math.random() * 13 - 5
+    const changeAmount = currentMarketCap * (changePercent / 100)
+
+    // Calculate new market cap
+    const newMarketCap = Math.max(500000, currentMarketCap + changeAmount)
+    const newUsdMarketCap = newMarketCap * 0.8
+    const newPrice = (newUsdMarketCap / 1000000000).toFixed(8)
+
+    // Update token data
+    setTokenData((prev) => {
+      if (!prev) return null
+      return {
+        ...prev,
+        marketCap: newMarketCap,
+        usdMarketCap: newUsdMarketCap,
+        price: newPrice,
+        priceChange: changePercent,
+        lastUpdated: new Date().toLocaleTimeString(),
+      }
+    })
+
+    // Add log if change is significant
+    if (Math.abs(changePercent) > 3) {
+      const direction = changePercent > 0 ? "up" : "down"
+      addGlobalLog(
+        "system",
+        "system",
+        `Market update: ${tokenData.symbol} price moved ${direction} by ${Math.abs(changePercent).toFixed(2)}% to ${newPrice} USD`,
+      )
+    }
+  }
+
+  // Add this new function after updateMarketData
+  const updateWalletBalances = (tabId: string) => {
+    if (!tabWallets[tabId]) return
+
+    setTabWallets((prev) => {
+      const wallets = [...prev[tabId]]
+
+      // Update each wallet's token balance
+      const updatedWallets = wallets.map((wallet) => {
+        // Random change between -2% and +5%
+        const changePercent = Math.random() * 7 - 2
+        const newBalance = Math.floor(wallet.tokenBalance * (1 + changePercent / 100))
+
+        return {
+          ...wallet,
+          tokenBalance: newBalance,
+        }
+      })
+
+      return {
+        ...prev,
+        [tabId]: updatedWallets,
+      }
+    })
   }
 
   // Handle starting a tab's task
@@ -1288,17 +1419,18 @@ export function TokenManagementWidget({ isVolumeBoost = false, selectedToken }: 
             {/* Header bar with action buttons - fixed at the top */}
             <div className="bg-[#191929] text-xs rounded-xl overflow-hidden shadow-sm border border-gray-800 m-2">
               <div className="flex flex-col sm:flex-row items-center justify-between bg-[#11111D] p-2 gap-2">
-              <div className="flex-col">
-                <h2 className="text-sm font-medium text-[#ECF1F0]">
-                  {tokenData.name} ({tokenData.symbol})
-                  </h2> {hasTokenAddress() && (
+                <div className="flex-col">
+                  <h2 className="text-sm font-medium text-[#ECF1F0]">
+                    {tokenData.name} ({tokenData.symbol})
+                  </h2>{" "}
+                  {hasTokenAddress() && (
                     <span className="ml-2 text-xs text-amber-400">
                       Address: {tokenData.address.substring(0, 6)}...
                       {tokenData.address.substring(tokenData.address.length - 4)}
                     </span>
                   )}
-                  </div>
-               
+                </div>
+
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     size="sm"

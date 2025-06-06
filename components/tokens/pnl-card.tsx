@@ -55,9 +55,20 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
       setMarketCap(tokenData.marketCap)
       marketCapRef.current = tokenData.marketCap
 
-      // Calculate mock PNL data
+      // Calculate PNL data based on market cap changes
       const initialInvestment = 10 // Mock initial investment of 10 SOL
-      const currentValue = initialInvestment * (1 + (tokenData.priceChange || 0) / 100)
+
+      // Use price change to calculate current value if available
+      let currentValue = initialInvestment
+      if (tokenData.priceChange !== undefined) {
+        // Calculate based on price change percentage
+        currentValue = initialInvestment * (1 + tokenData.priceChange / 100)
+      } else {
+        // Fallback calculation based on market cap
+        const marketCapRatio = tokenData.marketCap / marketCapRef.current
+        currentValue = initialInvestment * marketCapRatio
+      }
+
       const profitLoss = currentValue - initialInvestment
       const profitLossPercentage = ((currentValue - initialInvestment) / initialInvestment) * 100
 
@@ -271,7 +282,15 @@ export function PnlCard({ isTaskRunning, tokenSymbol, tokenData, hasBundleComple
                   <span>{lastUpdate || tokenData?.lastUpdated || "N/A"}</span>
                 </div>
               </div>
-              <p className="text-xs text-amber-400 truncate">{tokenData?.price || "N/A"}</p>
+              <div className="flex flex-col">
+                <p className="text-xs text-amber-400 truncate">{tokenData?.price || "N/A"}</p>
+                {tokenData?.priceChange !== undefined && (
+                  <p className={cn("text-xs", tokenData.priceChange >= 0 ? "text-green-400" : "text-red-400")}>
+                    {tokenData.priceChange >= 0 ? "+" : ""}
+                    {tokenData.priceChange.toFixed(2)}% (24h)
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         ) : (
